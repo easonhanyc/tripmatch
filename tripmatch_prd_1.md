@@ -1,4 +1,4 @@
-# TrekMatch — Product Requirements Document
+# TripMatch — Product Requirements Document
 *(working title — carpool coordination for the Haas community)*
 
 **Author:** [Your name]
