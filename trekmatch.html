@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TrekMatch — Haas carpool board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #003262;
+    --blue-deep: #001d3d;
+    --founders: #2d637c;
+    --gold: #fdb515;
+    --gold-deep: #c8890a;
+    --paper: #faf9f4;
+    --panel: #ffffff;
+    --ink: #14202b;
+    --ink-soft: #4a5a68;
+    --line: #dfe0d8;
+    --line-soft: #ecece4;
+    --good: #2d6a4f;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #app { min-height: 100vh; padding-bottom: 96px; }
+
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 16px; }
+
+  header.top {
+    background: var(--blue);
+    color: #fff;
+    padding: 28px 0 22px;
+    border-bottom: 5px solid var(--gold);
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0 0 6px;
+  }
+
+  h1.wordmark {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 34px;
+    line-height: 1;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .tagline {
+    margin: 0;
+    font-size: 14.5px;
+    color: #cfd9e2;
+    max-width: 46ch;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 18px;
+    margin-top: 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    color: #b9c8d4;
+  }
+  .stat-row b { color: #fff; font-size: 13.5px; }
+
+  main { padding-top: 22px; }
+
+  .board-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .board-header h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .board-header span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+  }
+
+  .group {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: 14px;
+    overflow: hidden;
+    animation: rise 0.35s ease both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    background: linear-gradient(180deg, #f4f2e9, #efede2);
+    border-bottom: 1px dashed var(--line);
+  }
+  .route {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    color: var(--blue);
+  }
+  .route .arrow { color: var(--gold-deep); padding: 0 4px; }
+  .group-date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  .row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .row:last-child { border-bottom: none; }
+
+  .row-time {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    min-width: 58px;
+    padding-top: 2px;
+  }
+
+  .row-main { flex: 1; min-width: 0; }
+  .row-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .name { font-weight: 600; font-size: 14.5px; }
+  .badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 999px;
+    line-height: 1.6;
+  }
+  .badge.driver { background: var(--good); color: #fff; }
+  .badge.rider { border: 1px solid var(--gold-deep); color: var(--gold-deep); background: #fff8e6; }
+
+  .cities { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+  .notes { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; font-style: italic; }
+
+  .copy-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    color: var(--blue);
+    padding: 6px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .copy-btn:hover { background: var(--line-soft); }
+  .copy-btn:active { transform: scale(0.97); }
+  .copy-btn.copied { background: var(--good); color: #fff; border-color: var(--good); }
+
+  .setup-banner {
+    background: #fff3cd;
+    border: 1px solid #e8c468;
+    color: #6b4a06;
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+  }
+  .setup-banner code {
+    background: rgba(0,0,0,0.08);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 46px 20px;
+    color: var(--ink-soft);
+    background: var(--panel);
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+  }
+  .empty .big { font-family: 'Fraunces', serif; font-size: 19px; color: var(--ink); margin-bottom: 6px; }
+
+  .loading { text-align: center; padding: 60px 20px; color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+
+  .fab {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--gold);
+    color: var(--blue-deep);
+    border: none;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    padding: 14px 26px;
+    border-radius: 999px;
+    box-shadow: 0 6px 18px rgba(0,50,98,0.25);
+    cursor: pointer;
+    z-index: 20;
+  }
+  .fab:hover { filter: brightness(1.04); }
+  .fab:active { transform: translateX(-50%) scale(0.97); }
+
+  .sheet-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(10, 20, 30, 0.45);
+    z-index: 30;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  @media (min-width: 640px) {
+    .sheet-backdrop { align-items: center; }
+  }
+
+  .sheet {
+    background: var(--panel);
+    width: 100%;
+    max-width: 520px;
+    max-height: 88vh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    padding: 20px 18px 26px;
+    animation: slideup 0.25s ease both;
+  }
+  @media (min-width: 640px) {
+    .sheet { border-radius: 14px; padding: 24px; }
+  }
+  @keyframes slideup { from { transform: translateY(24px); opacity: 0.6; } to { transform: translateY(0); opacity: 1; } }
+
+  .sheet h3 {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    margin: 0 0 4px;
+  }
+  .sheet .sub { font-size: 13px; color: var(--ink-soft); margin: 0 0 18px; }
+
+  label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 14px 0 5px;
+  }
+  label .hint { font-weight: 400; color: var(--ink-soft); font-size: 11.5px; display: block; margin-top: 2px; }
+
+  input[type=text], input[type=email], input[type=date], input[type=time], input[type=number], select {
+    width: 100%;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14.5px;
+    padding: 10px 11px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  input:focus, select:focus, button:focus-visible {
+    outline: 2px solid var(--founders);
+    outline-offset: 1px;
+  }
+
+  .role-toggle { display: flex; gap: 8px; margin-top: 6px; }
+  .role-opt {
+    flex: 1;
+    text-align: center;
+    padding: 10px 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    user-select: none;
+  }
+  .role-opt.active.driver { background: var(--good); border-color: var(--good); color: #fff; }
+  .role-opt.active.rider { background: #fff8e6; border-color: var(--gold-deep); color: var(--gold-deep); }
+
+  .two-col { display: flex; gap: 10px; }
+  .two-col > div { flex: 1; }
+
+  .err { color: #b3261e; font-size: 12px; margin-top: 6px; }
+
+  .submit-row { display: flex; gap: 10px; margin-top: 22px; }
+  .btn-primary, .btn-secondary {
+    flex: 1;
+    padding: 12px;
+    border-radius: 9px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 14.5px;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:hover { background: var(--blue-deep); }
+  .btn-secondary { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
+
+  .other-city { margin-top: 8px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="wrap">
+      <p class="eyebrow">Haas · rides board</p>
+      <h1 class="wordmark">TrekMatch</h1>
+      <p class="tagline">Post a trip, see who else is going your way. No more scrolling the group chat.</p>
+      <div class="stat-row" id="statRow"></div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div id="setupBanner" class="setup-banner hidden">
+      This board isn't connected to a backend yet — open trekmatch.html and fill in
+      <code>JSONBIN_BIN_ID</code> / <code>JSONBIN_KEY</code> near the top of the script.
+    </div>
+    <div class="board-header">
+      <h2>Open trips</h2>
+      <span id="boardMeta"></span>
+    </div>
+    <div id="board"><div class="loading">Loading the board…</div></div>
+  </main>
+
+  <button class="fab" id="openFab">+ Post a trip</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var ME_KEY = "trekmatch-me";
+
+  // ---- shared board backend (jsonbin.io) ----
+  // 1. Create a free account at https://jsonbin.io
+  // 2. Create a bin with initial content: []
+  // 3. Copy its Bin ID into JSONBIN_BIN_ID below.
+  // 4. Get a key: either your account's X-Master-Key, or (safer, since this
+  //    key is visible to anyone who views this page's source) an Access Key
+  //    scoped to just this one bin with Read+Update permission — if you use
+  //    a scoped Access Key, change JSONBIN_AUTH_HEADER to "X-Access-Key".
+  var JSONBIN_BIN_ID = "6a8a4416f5f4af5e2936f5b2";
+  var JSONBIN_KEY = "$2a$10$LAmSUbxwqH2kQaDkvQwggOaXrVgc4GmOWTi1TnADdjx6EZ6bmsu4u";
+  var JSONBIN_AUTH_HEADER = "X-Master-Key";
+  var JSONBIN_BASE = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
+
+  function backendConfigured() {
+    return JSONBIN_BIN_ID.indexOf("REPLACE_WITH") !== 0 && JSONBIN_KEY.indexOf("REPLACE_WITH") !== 0;
+  }
+
+  var CITIES_BY_REGION = {
+    "East Bay / Campus": ["Berkeley", "Oakland", "Emeryville", "Albany"],
+    "San Francisco": ["San Francisco"],
+    "Peninsula": ["Palo Alto", "Menlo Park", "Redwood City", "San Mateo", "Burlingame", "Foster City"],
+    "South Bay": ["Mountain View", "Sunnyvale", "Santa Clara", "San Jose", "Cupertino", "Milpitas"]
+  };
+  var REGION_ORDER = ["East Bay / Campus", "San Francisco", "Peninsula", "South Bay"];
+
+  var CITY_TO_REGION = {};
+  REGION_ORDER.forEach(function (region) {
+    CITIES_BY_REGION[region].forEach(function (city) { CITY_TO_REGION[city] = region; });
+  });
+
+  function regionOf(city) { return CITY_TO_REGION[city] || "Other"; }
+
+  function escapeHtml(s) {
+    return String(s || "").replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function todayISO() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  function formatDate(iso) {
+    if (!iso) return "";
+    var parts = iso.split("-");
+    var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  }
+
+  function formatTime(t) {
+    if (!t) return "";
+    var parts = t.split(":");
+    var h = parseInt(parts[0], 10);
+    var m = parts[1];
+    var suffix = h >= 12 ? "PM" : "AM";
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+    return h12 + ":" + m + " " + suffix;
+  }
+
+  // ---------- storage ----------
+
+  async function loadPosts() {
+    if (!backendConfigured()) return [];
+    try {
+      var headers = {};
+      headers[JSONBIN_AUTH_HEADER] = JSONBIN_KEY;
+      var res = await fetch(JSONBIN_BASE + "/latest", { headers: headers, cache: "no-store" });
+      if (!res.ok) return [];
+      var data = await res.json();
+      var arr = data && data.record && data.record.posts;
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      console.error("TrekMatch: failed to load posts", e);
+      return [];
+    }
+  }
+
+  // Returns { ok: true } or { ok: false, reason: "unconfigured"|"network"|"http" }
+  async function savePosts(posts) {
+    if (!backendConfigured()) return { ok: false, reason: "unconfigured" };
+    try {
+      var headers = { "Content-Type": "application/json" };
+      headers[JSONBIN_AUTH_HEADER] = JSONBIN_KEY;
+      var res = await fetch(JSONBIN_BASE, {
+        method: "PUT",
+        headers: headers,
+        body: JSON.stringify({ posts: posts })
+      });
+      if (!res.ok) return { ok: false, reason: "http" };
+      return { ok: true };
+    } catch (e) {
+      console.error("TrekMatch: failed to save posts", e);
+      return { ok: false, reason: "network" };
+    }
+  }
+
+  // "Remembered identity" is intentionally per-device only (see PRD open
+  // questions) — plain localStorage, no shared backend involved.
+  function loadMe() {
+    try {
+      var v = localStorage.getItem(ME_KEY);
+      return v ? JSON.parse(v) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveMe(me) {
+    try { localStorage.setItem(ME_KEY, JSON.stringify(me)); } catch (e) {}
+  }
+
+  // ---------- app state ----------
+
+  var state = { posts: [], me: null };
+
+  async function init() {
+    state.me = loadMe();
+    document.getElementById("setupBanner").classList.toggle("hidden", backendConfigured());
+
+    var posts = await loadPosts();
+    var today = todayISO();
+    var active = posts.filter(function (p) { return p.date >= today; });
+    if (active.length !== posts.length) {
+      // clean up expired posts in storage
+      await savePosts(active);
+    }
+    state.posts = active;
+    render();
+  }
+
+  function groupPosts(posts) {
+    var groups = {};
+    posts.forEach(function (p) {
+      var key = p.originRegion + "→" + p.destRegion + "__" + p.date;
+      if (!groups[key]) {
+        groups[key] = { originRegion: p.originRegion, destRegion: p.destRegion, date: p.date, items: [] };
+      }
+      groups[key].items.push(p);
+    });
+    var arr = Object.keys(groups).map(function (k) { return groups[k]; });
+    arr.sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      return a.originRegion.localeCompare(b.originRegion);
+    });
+    arr.forEach(function (g) {
+      g.items.sort(function (a, b) { return (a.time || "").localeCompare(b.time || ""); });
+    });
+    return arr;
+  }
+
+  function render() {
+    var offering = state.posts.filter(function (p) { return p.role === "driver"; }).length;
+    var needing = state.posts.filter(function (p) { return p.role === "rider"; }).length;
+    document.getElementById("statRow").innerHTML =
+      '<span><b>' + state.posts.length + '</b> open trips</span>' +
+      '<span><b>' + offering + '</b> offering seats</span>' +
+      '<span><b>' + needing + '</b> looking for a ride</span>';
+
+    var board = document.getElementById("board");
+    var meta = document.getElementById("boardMeta");
+
+    if (state.posts.length === 0) {
+      meta.textContent = "";
+      board.innerHTML =
+        '<div class="empty">' +
+        '<div class="big">Nothing posted yet</div>' +
+        '<div>Be the first — post a trip and it\'ll show up here for the rest of the cohort.</div>' +
+        '</div>';
+      return;
+    }
+
+    var groups = groupPosts(state.posts);
+    meta.textContent = groups.length + " route" + (groups.length === 1 ? "" : "s") + " active";
+
+    var html = "";
+    groups.forEach(function (g) {
+      html += '<div class="group">';
+      html += '<div class="group-head">';
+      html += '<div class="route">' + escapeHtml(g.originRegion) + '<span class="arrow">→</span>' + escapeHtml(g.destRegion) + '</div>';
+      html += '<div class="group-date">' + formatDate(g.date) + '</div>';
+      html += '</div>';
+      g.items.forEach(function (p) {
+        html += '<div class="row">';
+        html += '<div class="row-time">' + (p.time ? formatTime(p.time) : "—") + '</div>';
+        html += '<div class="row-main">';
+        html += '<div class="row-top">';
+        html += '<span class="name">' + escapeHtml(p.name) + '</span>';
+        if (p.role === "driver") {
+          html += '<span class="badge driver">Offering · ' + p.seats + ' seat' + (p.seats == 1 ? "" : "s") + '</span>';
+        } else {
+          html += '<span class="badge rider">Needs a ride</span>';
+        }
+        html += '</div>';
+        html += '<div class="cities">' + escapeHtml(p.originCity) + ' → ' + escapeHtml(p.destCity) + '</div>';
+        if (p.notes) html += '<div class="notes">' + escapeHtml(p.notes) + '</div>';
+        html += '</div>';
+        html += '<button class="copy-btn" data-id="' + p.id + '">Copy for WhatsApp</button>';
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    board.innerHTML = html;
+
+    Array.prototype.forEach.call(document.querySelectorAll(".copy-btn"), function (btn) {
+      btn.addEventListener("click", function () {
+        var post = state.posts.find(function (p) { return String(p.id) === btn.getAttribute("data-id"); });
+        if (post) copyText(buildShareText(post), btn);
+      });
+    });
+  }
+
+  function buildShareText(p) {
+    var roleLine = p.role === "driver"
+      ? "🚗 Offering a ride — " + p.seats + " seat" + (p.seats == 1 ? "" : "s") + " open"
+      : "🙋 Looking for a ride";
+    var lines = [
+      roleLine,
+      p.originCity + " → " + p.destCity + " (" + p.originRegion + " → " + p.destRegion + ")",
+      formatDate(p.date) + (p.time ? " · " + formatTime(p.time) : "")
+    ];
+    if (p.notes) lines.push("Note: " + p.notes);
+    lines.push("Posted by " + p.name);
+    lines.push("");
+    lines.push("Find a match: " + window.location.href);
+    return lines.join("\n");
+  }
+
+  function copyText(text, btn) {
+    var done = function () {
+      var original = btn.textContent;
+      btn.textContent = "Copied ✓";
+      btn.classList.add("copied");
+      setTimeout(function () { btn.textContent = original; btn.classList.remove("copied"); }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
+    } else {
+      fallbackCopy(text, done);
+    }
+  }
+
+  function fallbackCopy(text, done) {
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      done();
+    } catch (e) {
+      window.prompt("Copy this text manually:", text);
+    }
+  }
+
+  // ---------- form sheet ----------
+
+  function buildCitySelect(selectEl) {
+    var html = "";
+    REGION_ORDER.forEach(function (region) {
+      html += '<optgroup label="' + escapeHtml(region) + '">';
+      CITIES_BY_REGION[region].forEach(function (city) {
+        html += '<option value="' + escapeHtml(city) + '">' + escapeHtml(city) + '</option>';
+      });
+      html += '</optgroup>';
+    });
+    html += '<option value="__other__">Other city…</option>';
+    selectEl.innerHTML = html;
+  }
+
+  function openSheet() {
+    var backdrop = document.createElement("div");
+    backdrop.className = "sheet-backdrop";
+    backdrop.innerHTML =
+      '<div class="sheet">' +
+      '<h3>Post a trip</h3>' +
+      '<p class="sub">Takes about 15 seconds. Visible to everyone with this link.</p>' +
+      '<form id="tripForm">' +
+
+      '<label>Your name<input type="text" id="f_name" required>' +
+      '<span class="hint">Remembered on this device after your first post — you won\'t need to retype it.</span>' +
+      '</label>' +
+
+      '<label>I am…</label>' +
+      '<div class="role-toggle">' +
+      '<div class="role-opt driver" data-role="driver">Driving — have seats</div>' +
+      '<div class="role-opt rider" data-role="rider">Need a ride</div>' +
+      '</div>' +
+      '<div id="seatsWrap" class="hidden">' +
+      '<label>Seats available<input type="number" id="f_seats" min="1" max="8" value="2"></label>' +
+      '</div>' +
+
+      '<div class="two-col">' +
+      '<div><label>From<select id="f_origin"></select></label>' +
+      '<div class="other-city hidden" id="originOtherWrap"><input type="text" id="f_originOther" placeholder="Type city"></div></div>' +
+      '<div><label>To<select id="f_dest"></select></label>' +
+      '<div class="other-city hidden" id="destOtherWrap"><input type="text" id="f_destOther" placeholder="Type city"></div></div>' +
+      '</div>' +
+
+      '<div class="two-col">' +
+      '<div><label>Date<input type="date" id="f_date" required></label></div>' +
+      '<div><label>Time<span class="hint" style="display:inline">(optional)</span><input type="time" id="f_time"></label></div>' +
+      '</div>' +
+
+      '<label>Notes<span class="hint" style="display:inline">(optional — flexibility, luggage, etc.)</span>' +
+      '<input type="text" id="f_notes" placeholder="e.g. flexible ±30 min, one big suitcase"></label>' +
+
+      '<div id="formErr" class="err hidden"></div>' +
+
+      '<div class="submit-row">' +
+      '<button type="button" class="btn-secondary" id="cancelBtn">Cancel</button>' +
+      '<button type="submit" class="btn-primary">Post trip</button>' +
+      '</div>' +
+      '</form>' +
+      '</div>';
+
+    document.body.appendChild(backdrop);
+
+    var originSel = backdrop.querySelector("#f_origin");
+    var destSel = backdrop.querySelector("#f_dest");
+    buildCitySelect(originSel);
+    buildCitySelect(destSel);
+
+    // prefill known identity
+    if (state.me) {
+      backdrop.querySelector("#f_name").value = state.me.name || "";
+    }
+    var dateInput = backdrop.querySelector("#f_date");
+    dateInput.min = todayISO();
+
+    var role = null;
+    Array.prototype.forEach.call(backdrop.querySelectorAll(".role-opt"), function (opt) {
+      opt.addEventListener("click", function () {
+        role = opt.getAttribute("data-role");
+        Array.prototype.forEach.call(backdrop.querySelectorAll(".role-opt"), function (o) { o.classList.remove("active"); });
+        opt.classList.add("active");
+        backdrop.querySelector("#seatsWrap").classList.toggle("hidden", role !== "driver");
+      });
+    });
+
+    originSel.addEventListener("change", function () {
+      backdrop.querySelector("#originOtherWrap").classList.toggle("hidden", originSel.value !== "__other__");
+    });
+    destSel.addEventListener("change", function () {
+      backdrop.querySelector("#destOtherWrap").classList.toggle("hidden", destSel.value !== "__other__");
+    });
+
+    backdrop.querySelector("#cancelBtn").addEventListener("click", function () {
+      document.body.removeChild(backdrop);
+    });
+    backdrop.addEventListener("click", function (e) {
+      if (e.target === backdrop) document.body.removeChild(backdrop);
+    });
+
+    backdrop.querySelector("#tripForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var errEl = backdrop.querySelector("#formErr");
+      errEl.classList.add("hidden");
+
+      var name = backdrop.querySelector("#f_name").value.trim();
+      var date = backdrop.querySelector("#f_date").value;
+      var time = backdrop.querySelector("#f_time").value;
+      var notes = backdrop.querySelector("#f_notes").value.trim();
+
+      var originCity = originSel.value === "__other__" ? backdrop.querySelector("#f_originOther").value.trim() : originSel.value;
+      var destCity = destSel.value === "__other__" ? backdrop.querySelector("#f_destOther").value.trim() : destSel.value;
+
+      if (!name || !date || !role || !originCity || !destCity) {
+        errEl.textContent = "Please fill in your name, role, route, and date.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+      var seats = 0;
+      if (role === "driver") {
+        seats = parseInt(backdrop.querySelector("#f_seats").value, 10);
+        if (!seats || seats < 1) {
+          errEl.textContent = "Enter how many seats you have open.";
+          errEl.classList.remove("hidden");
+          return;
+        }
+      }
+
+      var post = {
+        id: Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+        name: name,
+        role: role,
+        seats: seats,
+        date: date,
+        time: time,
+        notes: notes,
+        originCity: originCity,
+        destCity: destCity,
+        originRegion: regionOf(originCity),
+        destRegion: regionOf(destCity),
+        createdAt: Date.now()
+      };
+
+      var submitBtn = backdrop.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Posting…";
+
+      var current = await loadPosts();
+      current.push(post);
+      var result = await savePosts(current);
+
+      if (!result.ok) {
+        if (result.reason === "unconfigured") {
+          errEl.textContent = "This board isn't connected to a backend yet — ask whoever set up the page to add its storage key.";
+        } else {
+          errEl.textContent = "Couldn't save your post — check your connection and try again.";
+        }
+        errEl.classList.remove("hidden");
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Post trip";
+        return;
+      }
+
+      saveMe({ name: name });
+      state.me = { name: name };
+
+      var today = todayISO();
+      state.posts = current.filter(function (p) { return p.date >= today; });
+
+      document.body.removeChild(backdrop);
+      render();
+    });
+  }
+
+  document.getElementById("openFab").addEventListener("click", openSheet);
+
+  init();
+})();
+</script>
+</body>
+</html>
