@@ -76,13 +76,25 @@
 
   .stat-row {
     display: flex;
-    gap: 18px;
+    gap: 6px;
     margin-top: 16px;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 12.5px;
     color: #b9c8d4;
   }
   .stat-row b { color: #fff; font-size: 13.5px; }
+  .stat-btn {
+    background: transparent;
+    border: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.15s;
+  }
+  .stat-btn:hover { background: rgba(255,255,255,0.12); }
+  .stat-btn.active { background: rgba(255,255,255,0.22); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45); }
 
   main { padding-top: 22px; }
 
@@ -107,6 +119,7 @@
   .group {
     background: var(--panel);
     border: 1px solid var(--line);
+    border-left: 4px solid transparent;
     border-radius: var(--radius);
     margin-bottom: 14px;
     overflow: hidden;
@@ -139,13 +152,16 @@
   }
 
   .row {
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .row:last-child { border-bottom: none; }
+
+  .row-summary {
     display: flex;
     gap: 12px;
     align-items: flex-start;
     padding: 12px 14px;
-    border-bottom: 1px solid var(--line-soft);
   }
-  .row:last-child { border-bottom: none; }
 
   .row-time {
     font-family: 'IBM Plex Mono', monospace;
@@ -158,6 +174,54 @@
   .row-main { flex: 1; min-width: 0; }
   .row-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .name { font-weight: 600; font-size: 14.5px; }
+
+  .row-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+
+  .comment-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    padding: 6px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .comment-btn:hover { background: var(--line-soft); }
+  .comment-btn.has-comments { color: var(--blue); border-color: var(--blue); }
+
+  .row-details {
+    padding: 0 14px 14px 66px;
+    background: var(--paper);
+  }
+  .comments-list { margin-bottom: 10px; }
+  .no-comments { font-size: 12.5px; color: var(--ink-soft); font-style: italic; padding: 6px 0; }
+  .comment { padding: 8px 0; border-top: 1px dashed var(--line); }
+  .comment:first-child { border-top: none; }
+  .comment-head { display: flex; justify-content: space-between; gap: 8px; }
+  .c-name { font-weight: 600; font-size: 12.5px; color: var(--ink); }
+  .c-time { color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace; font-size: 11px; white-space: nowrap; }
+  .c-text { font-size: 13px; color: var(--ink); margin-top: 2px; word-wrap: break-word; }
+
+  .comment-form { margin-top: 6px; }
+  .comment-form input[type=text] { margin-bottom: 6px; }
+  .comment-row2 { display: flex; gap: 8px; }
+  .comment-row2 input[type=text] { flex: 1; }
+  .comment-row2 button {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 0 16px;
+    border-radius: 8px;
+    border: none;
+    background: var(--blue);
+    color: #fff;
+    cursor: pointer;
+  }
+  .comment-row2 button:hover { background: var(--blue-deep); }
+  .comment-err { margin-top: 4px; }
   .badge {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 10.5px;
@@ -282,7 +346,7 @@
   }
   label .hint { font-weight: 400; color: var(--ink-soft); font-size: 11.5px; display: block; margin-top: 2px; }
 
-  input[type=text], input[type=email], input[type=date], input[type=time], input[type=number], select {
+  input[type=text], input[type=email], input[type=date], input[type=number], select {
     width: 100%;
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 14.5px;
@@ -296,6 +360,21 @@
     outline: 2px solid var(--founders);
     outline-offset: 1px;
   }
+
+  .time-wheel { display: flex; align-items: center; gap: 6px; }
+  .time-select {
+    width: auto;
+    flex: 1;
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14.5px;
+    padding: 10px 6px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .time-colon { font-weight: 600; color: var(--ink-soft); }
 
   .role-toggle { display: flex; gap: 8px; margin-top: 6px; }
   .role-opt {
@@ -406,6 +485,32 @@
 
   function regionOf(city) { return CITY_TO_REGION[city] || "Other"; }
 
+  // Route colors: keyed by the two regions sorted into a canonical order, so
+  // a corridor reads as the same color in both directions (EB→SF and SF→EB
+  // are "the same route" for recognition purposes).
+  var REGION_PRIORITY = { "East Bay / Campus": 0, "San Francisco": 1, "Peninsula": 2, "South Bay": 3 };
+  function regionRank(r) { return REGION_PRIORITY.hasOwnProperty(r) ? REGION_PRIORITY[r] : 99; }
+
+  var ROUTE_COLORS = {
+    "East Bay / Campus|East Bay / Campus": { accent: "#1f8a8c", bg: "#e3f4f4" },
+    "East Bay / Campus|San Francisco":     { accent: "#2f9e5c", bg: "#e8f5ec" },
+    "East Bay / Campus|Peninsula":         { accent: "#7c5cbf", bg: "#efe9fa" },
+    "East Bay / Campus|South Bay":         { accent: "#d9730d", bg: "#fdecd8" },
+    "San Francisco|San Francisco":         { accent: "#2f6fb0", bg: "#e7f0fa" },
+    "San Francisco|Peninsula":             { accent: "#c14c76", bg: "#fbe8ef" },
+    "San Francisco|South Bay":             { accent: "#4854c4", bg: "#e8e9fb" },
+    "Peninsula|Peninsula":                 { accent: "#5b6b7a", bg: "#eaedf0" },
+    "Peninsula|South Bay":                 { accent: "#a15c3e", bg: "#f6e9e2" },
+    "South Bay|South Bay":                 { accent: "#a67c1e", bg: "#f6eed9" }
+  };
+  var FALLBACK_ROUTE_COLOR = { accent: "#6b7280", bg: "#eef0f2" };
+
+  function routeColor(originRegion, destRegion) {
+    var a = originRegion, b = destRegion;
+    if (regionRank(b) < regionRank(a)) { var tmp = a; a = b; b = tmp; }
+    return ROUTE_COLORS[a + "|" + b] || FALLBACK_ROUTE_COLOR;
+  }
+
   function escapeHtml(s) {
     return String(s || "").replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -425,13 +530,15 @@
   }
 
   function formatTime(t) {
-    if (!t) return "";
-    var parts = t.split(":");
-    var h = parseInt(parts[0], 10);
-    var m = parts[1];
-    var suffix = h >= 12 ? "PM" : "AM";
-    var h12 = h % 12; if (h12 === 0) h12 = 12;
-    return h12 + ":" + m + " " + suffix;
+    // Stored and displayed as 24-hour "HH:MM" throughout — no AM/PM.
+    return t || "";
+  }
+
+  function formatCommentTime(ms) {
+    var d = new Date(ms);
+    var hh = String(d.getHours()).padStart(2, "0");
+    var mm = String(d.getMinutes()).padStart(2, "0");
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + ", " + hh + ":" + mm;
   }
 
   // ---------- storage ----------
@@ -488,7 +595,9 @@
 
   // ---------- app state ----------
 
-  var state = { posts: [], me: null };
+  // filter: null | "driver" | "rider" — which stat button is toggled on.
+  // expanded: postId -> true, tracks which posts have their comments open.
+  var state = { posts: [], me: null, filter: null, expanded: {} };
 
   async function init() {
     state.me = loadMe();
@@ -525,13 +634,86 @@
     return arr;
   }
 
+  function renderRow(p) {
+    var comments = p.comments || [];
+    var expanded = !!state.expanded[p.id];
+    var html = '<div class="row" data-post-id="' + p.id + '">';
+
+    html += '<div class="row-summary">';
+    html += '<div class="row-time">' + (p.time ? formatTime(p.time) : "—") + '</div>';
+    html += '<div class="row-main">';
+    html += '<div class="row-top">';
+    html += '<span class="name">' + escapeHtml(p.name) + '</span>';
+    if (p.role === "driver") {
+      html += '<span class="badge driver">Offering · ' + p.seats + ' seat' + (p.seats == 1 ? "" : "s") + '</span>';
+    } else {
+      html += '<span class="badge rider">Needs a ride</span>';
+    }
+    html += '</div>';
+    html += '<div class="cities">' + escapeHtml(p.originCity) + ' → ' + escapeHtml(p.destCity) + '</div>';
+    if (p.notes) html += '<div class="notes">' + escapeHtml(p.notes) + '</div>';
+    html += '</div>';
+    html += '<div class="row-actions">';
+    html += '<button class="comment-btn' + (comments.length ? ' has-comments' : '') + '" data-id="' + p.id + '">💬 ' + comments.length + '</button>';
+    html += '<button class="copy-btn" data-id="' + p.id + '">Copy for WhatsApp</button>';
+    html += '</div>';
+    html += '</div>'; // row-summary
+
+    html += '<div class="row-details' + (expanded ? '' : ' hidden') + '">';
+    html += '<div class="comments-list">';
+    if (comments.length === 0) {
+      html += '<div class="no-comments">No comments yet — be the first to ask a question.</div>';
+    } else {
+      comments.forEach(function (c) {
+        html += '<div class="comment">';
+        html += '<div class="comment-head"><span class="c-name">' + escapeHtml(c.name) + '</span><span class="c-time">' + formatCommentTime(c.createdAt) + '</span></div>';
+        html += '<div class="c-text">' + escapeHtml(c.text) + '</div>';
+        html += '</div>';
+      });
+    }
+    html += '</div>'; // comments-list
+    html += '<form class="comment-form" data-id="' + p.id + '">';
+    if (!state.me || !state.me.name) {
+      html += '<input type="text" class="comment-name-input" placeholder="Your name" maxlength="60" required>';
+    }
+    html += '<div class="comment-row2">';
+    html += '<input type="text" class="comment-text-input" placeholder="Add a comment…" maxlength="300" required>';
+    html += '<button type="submit">Send</button>';
+    html += '</div>';
+    html += '<div class="comment-err err hidden"></div>';
+    html += '</form>';
+    html += '</div>'; // row-details
+
+    html += '</div>'; // row
+    return html;
+  }
+
+  function wireClearFilterLink() {
+    var el = document.getElementById("clearFilterLink");
+    if (el) {
+      el.addEventListener("click", function (e) {
+        e.preventDefault();
+        state.filter = null;
+        render();
+      });
+    }
+  }
+
   function render() {
     var offering = state.posts.filter(function (p) { return p.role === "driver"; }).length;
     var needing = state.posts.filter(function (p) { return p.role === "rider"; }).length;
     document.getElementById("statRow").innerHTML =
-      '<span><b>' + state.posts.length + '</b> open trips</span>' +
-      '<span><b>' + offering + '</b> offering seats</span>' +
-      '<span><b>' + needing + '</b> looking for a ride</span>';
+      '<button type="button" class="stat-btn' + (!state.filter ? ' active' : '') + '" data-filter="all"><b>' + state.posts.length + '</b> open trips</button>' +
+      '<button type="button" class="stat-btn' + (state.filter === "driver" ? ' active' : '') + '" data-filter="driver"><b>' + offering + '</b> offering seats</button>' +
+      '<button type="button" class="stat-btn' + (state.filter === "rider" ? ' active' : '') + '" data-filter="rider"><b>' + needing + '</b> looking for a ride</button>';
+
+    Array.prototype.forEach.call(document.querySelectorAll(".stat-btn"), function (btn) {
+      btn.addEventListener("click", function () {
+        var f = btn.getAttribute("data-filter");
+        state.filter = (f === "all" || state.filter === f) ? null : f;
+        render();
+      });
+    });
 
     var board = document.getElementById("board");
     var meta = document.getElementById("boardMeta");
@@ -546,34 +728,37 @@
       return;
     }
 
-    var groups = groupPosts(state.posts);
-    meta.textContent = groups.length + " route" + (groups.length === 1 ? "" : "s") + " active";
+    var visiblePosts = state.filter ? state.posts.filter(function (p) { return p.role === state.filter; }) : state.posts;
+
+    if (visiblePosts.length === 0) {
+      meta.innerHTML = 'No trips match this filter <a href="#" id="clearFilterLink">(clear filter)</a>';
+      board.innerHTML =
+        '<div class="empty">' +
+        '<div class="big">No matches for this filter</div>' +
+        '<div>Try clearing the filter to see all open trips.</div>' +
+        '</div>';
+      wireClearFilterLink();
+      return;
+    }
+
+    var groups = groupPosts(visiblePosts);
+    var metaText = groups.length + " route" + (groups.length === 1 ? "" : "s") + " active";
+    if (state.filter) {
+      var filterLabel = state.filter === "driver" ? "offering seats" : "looking for a ride";
+      meta.innerHTML = metaText + ' · showing: ' + filterLabel + ' <a href="#" id="clearFilterLink">(clear)</a>';
+    } else {
+      meta.textContent = metaText;
+    }
 
     var html = "";
     groups.forEach(function (g) {
-      html += '<div class="group">';
-      html += '<div class="group-head">';
-      html += '<div class="route">' + escapeHtml(g.originRegion) + '<span class="arrow">→</span>' + escapeHtml(g.destRegion) + '</div>';
+      var rc = routeColor(g.originRegion, g.destRegion);
+      html += '<div class="group" style="border-left-color:' + rc.accent + ';">';
+      html += '<div class="group-head" style="background:' + rc.bg + ';">';
+      html += '<div class="route" style="color:' + rc.accent + ';">' + escapeHtml(g.originRegion) + '<span class="arrow" style="color:' + rc.accent + ';">→</span>' + escapeHtml(g.destRegion) + '</div>';
       html += '<div class="group-date">' + formatDate(g.date) + '</div>';
       html += '</div>';
-      g.items.forEach(function (p) {
-        html += '<div class="row">';
-        html += '<div class="row-time">' + (p.time ? formatTime(p.time) : "—") + '</div>';
-        html += '<div class="row-main">';
-        html += '<div class="row-top">';
-        html += '<span class="name">' + escapeHtml(p.name) + '</span>';
-        if (p.role === "driver") {
-          html += '<span class="badge driver">Offering · ' + p.seats + ' seat' + (p.seats == 1 ? "" : "s") + '</span>';
-        } else {
-          html += '<span class="badge rider">Needs a ride</span>';
-        }
-        html += '</div>';
-        html += '<div class="cities">' + escapeHtml(p.originCity) + ' → ' + escapeHtml(p.destCity) + '</div>';
-        if (p.notes) html += '<div class="notes">' + escapeHtml(p.notes) + '</div>';
-        html += '</div>';
-        html += '<button class="copy-btn" data-id="' + p.id + '">Copy for WhatsApp</button>';
-        html += '</div>';
-      });
+      g.items.forEach(function (p) { html += renderRow(p); });
       html += '</div>';
     });
     board.innerHTML = html;
@@ -584,6 +769,66 @@
         if (post) copyText(buildShareText(post), btn);
       });
     });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".comment-btn"), function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-id");
+        state.expanded[id] = !state.expanded[id];
+        render();
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".comment-form"), function (form) {
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var id = form.getAttribute("data-id");
+        var errEl = form.querySelector(".comment-err");
+        errEl.classList.add("hidden");
+
+        var nameInput = form.querySelector(".comment-name-input");
+        var textInput = form.querySelector(".comment-text-input");
+        var name = nameInput ? nameInput.value.trim() : (state.me && state.me.name);
+        var text = textInput.value.trim();
+        if (!name || !text) return;
+
+        var submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+
+        var current = await loadPosts();
+        var target = current.find(function (p) { return String(p.id) === id; });
+        if (!target) {
+          errEl.textContent = "This post was removed — refresh the page.";
+          errEl.classList.remove("hidden");
+          submitBtn.disabled = false;
+          return;
+        }
+        if (!Array.isArray(target.comments)) target.comments = [];
+        target.comments.push({
+          id: Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+          name: name,
+          text: text,
+          createdAt: Date.now()
+        });
+
+        var result = await savePosts(current);
+        submitBtn.disabled = false;
+
+        if (!result.ok) {
+          errEl.textContent = "Couldn't post your comment — check your connection and try again.";
+          errEl.classList.remove("hidden");
+          return;
+        }
+
+        if (nameInput) { saveMe({ name: name }); state.me = { name: name }; }
+
+        var today = todayISO();
+        state.posts = current.filter(function (p) { return p.date >= today; });
+        state.expanded[id] = true;
+        render();
+      });
+    });
+
+    wireClearFilterLink();
   }
 
   function buildShareText(p) {
@@ -647,6 +892,22 @@
     selectEl.innerHTML = html;
   }
 
+  function buildTimeSelects(hourSel, minuteSel) {
+    var h = '<option value="">--</option>';
+    for (var i = 0; i < 24; i++) {
+      var hv = String(i).padStart(2, "0");
+      h += '<option value="' + hv + '">' + hv + '</option>';
+    }
+    hourSel.innerHTML = h;
+
+    var m = '<option value="">--</option>';
+    for (var j = 0; j < 60; j += 5) {
+      var mv = String(j).padStart(2, "0");
+      m += '<option value="' + mv + '">' + mv + '</option>';
+    }
+    minuteSel.innerHTML = m;
+  }
+
   function openSheet() {
     var backdrop = document.createElement("div");
     backdrop.className = "sheet-backdrop";
@@ -678,7 +939,9 @@
 
       '<div class="two-col">' +
       '<div><label>Date<input type="date" id="f_date" required></label></div>' +
-      '<div><label>Time<span class="hint" style="display:inline">(optional)</span><input type="time" id="f_time"></label></div>' +
+      '<div><label>Time<span class="hint" style="display:inline">(optional, 24h)</span>' +
+      '<div class="time-wheel"><select id="f_hour" class="time-select"></select><span class="time-colon">:</span><select id="f_minute" class="time-select"></select></div>' +
+      '</label></div>' +
       '</div>' +
 
       '<label>Notes<span class="hint" style="display:inline">(optional — flexibility, luggage, etc.)</span>' +
@@ -699,6 +962,7 @@
     var destSel = backdrop.querySelector("#f_dest");
     buildCitySelect(originSel);
     buildCitySelect(destSel);
+    buildTimeSelects(backdrop.querySelector("#f_hour"), backdrop.querySelector("#f_minute"));
 
     // prefill known identity
     if (state.me) {
@@ -738,7 +1002,9 @@
 
       var name = backdrop.querySelector("#f_name").value.trim();
       var date = backdrop.querySelector("#f_date").value;
-      var time = backdrop.querySelector("#f_time").value;
+      var hourVal = backdrop.querySelector("#f_hour").value;
+      var minuteVal = backdrop.querySelector("#f_minute").value;
+      var time = (hourVal && minuteVal) ? (hourVal + ":" + minuteVal) : "";
       var notes = backdrop.querySelector("#f_notes").value.trim();
 
       var originCity = originSel.value === "__other__" ? backdrop.querySelector("#f_originOther").value.trim() : originSel.value;
@@ -771,7 +1037,8 @@
         destCity: destCity,
         originRegion: regionOf(originCity),
         destRegion: regionOf(destCity),
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        comments: []
       };
 
       var submitBtn = backdrop.querySelector('button[type="submit"]');
@@ -799,6 +1066,7 @@
 
       var today = todayISO();
       state.posts = current.filter(function (p) { return p.date >= today; });
+      state.filter = null;
 
       document.body.removeChild(backdrop);
       render();
