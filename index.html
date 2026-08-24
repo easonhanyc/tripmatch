@@ -192,6 +192,47 @@
   .comment-btn:hover { background: var(--line-soft); }
   .comment-btn.has-comments { color: var(--blue); border-color: var(--blue); }
 
+  .delete-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    color: #b3261e;
+    padding: 6px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .delete-btn:hover { background: #fdecea; border-color: #f3b9b0; }
+
+  .row-confirm {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #fdecea;
+    border-top: 1px solid #f3b9b0;
+    font-size: 13px;
+    color: #7a2116;
+  }
+  .row-confirm-actions { display: flex; gap: 8px; }
+  .btn-cancel-delete, .btn-confirm-delete {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-cancel-delete { background: transparent; border: 1px solid var(--line); color: var(--ink-soft); }
+  .btn-confirm-delete { background: #b3261e; color: #fff; }
+  .btn-confirm-delete:hover { background: #8f1e18; }
+  .row-confirm .delete-err { width: 100%; margin: 0; }
+
   .row-details {
     padding: 0 14px 14px 66px;
     background: var(--paper);
@@ -597,7 +638,9 @@
 
   // filter: null | "driver" | "rider" — which stat button is toggled on.
   // expanded: postId -> true, tracks which posts have their comments open.
-  var state = { posts: [], me: null, filter: null, expanded: {} };
+  // confirmingDelete: postId -> true, tracks which posts are showing the
+  // "are you sure?" bar (the required second step before an actual delete).
+  var state = { posts: [], me: null, filter: null, expanded: {}, confirmingDelete: {} };
 
   async function init() {
     state.me = loadMe();
@@ -607,7 +650,9 @@
     var today = todayISO();
     var active = posts.filter(function (p) { return p.date >= today; });
     if (active.length !== posts.length) {
-      // clean up expired posts in storage
+      // Auto-cleanup: a static page has no server-side cron, so "automatic"
+      // means opportunistic — whoever's browser next loads the board past a
+      // trip's date scrubs it from shared storage for everyone.
       await savePosts(active);
     }
     state.posts = active;
@@ -637,6 +682,8 @@
   function renderRow(p) {
     var comments = p.comments || [];
     var expanded = !!state.expanded[p.id];
+    var isOwner = !!(state.me && state.me.name && state.me.name === p.name);
+    var confirming = !!state.confirmingDelete[p.id];
     var html = '<div class="row" data-post-id="' + p.id + '">';
 
     html += '<div class="row-summary">';
@@ -656,8 +703,22 @@
     html += '<div class="row-actions">';
     html += '<button class="comment-btn' + (comments.length ? ' has-comments' : '') + '" data-id="' + p.id + '">💬 ' + comments.length + '</button>';
     html += '<button class="copy-btn" data-id="' + p.id + '">Copy for WhatsApp</button>';
+    if (isOwner) {
+      html += '<button class="delete-btn" data-id="' + p.id + '">Delete</button>';
+    }
     html += '</div>';
     html += '</div>'; // row-summary
+
+    if (confirming) {
+      html += '<div class="row-confirm">';
+      html += '<span>Delete this post? This can\'t be undone.</span>';
+      html += '<div class="row-confirm-actions">';
+      html += '<button type="button" class="btn-cancel-delete" data-id="' + p.id + '">Cancel</button>';
+      html += '<button type="button" class="btn-confirm-delete" data-id="' + p.id + '">Yes, delete</button>';
+      html += '</div>';
+      html += '<div class="delete-err err hidden"></div>';
+      html += '</div>';
+    }
 
     html += '<div class="row-details' + (expanded ? '' : ' hidden') + '">';
     html += '<div class="comments-list">';
@@ -774,6 +835,49 @@
       btn.addEventListener("click", function () {
         var id = btn.getAttribute("data-id");
         state.expanded[id] = !state.expanded[id];
+        render();
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".delete-btn"), function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-id");
+        state.confirmingDelete[id] = true;
+        render();
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".btn-cancel-delete"), function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-id");
+        delete state.confirmingDelete[id];
+        render();
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".btn-confirm-delete"), function (btn) {
+      btn.addEventListener("click", async function () {
+        var id = btn.getAttribute("data-id");
+        var errEl = btn.closest(".row-confirm").querySelector(".delete-err");
+        errEl.classList.add("hidden");
+        btn.disabled = true;
+        btn.textContent = "Deleting…";
+
+        var current = await loadPosts();
+        var next = current.filter(function (p) { return String(p.id) !== id; });
+        var result = await savePosts(next);
+
+        if (!result.ok) {
+          btn.disabled = false;
+          btn.textContent = "Yes, delete";
+          errEl.textContent = "Couldn't delete — check your connection and try again.";
+          errEl.classList.remove("hidden");
+          return;
+        }
+
+        delete state.confirmingDelete[id];
+        var today = todayISO();
+        state.posts = next.filter(function (p) { return p.date >= today; });
         render();
       });
     });
