@@ -8,17 +8,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --blue: #003262;
-    --blue-deep: #001d3d;
+    /* UC Berkeley Haas official brand tokens: Haas Blue + California Gold
+       (haas.berkeley.edu/brand-toolkit) — everything else in this palette
+       (route colors included) is derived from these two, not picked freely. */
+    --blue: #003057;
+    --blue-deep: #001b33;
     --founders: #2d637c;
     --gold: #fdb515;
     --gold-deep: #c8890a;
-    --paper: #faf9f4;
+    --paper: #f7f6f2;
     --panel: #ffffff;
-    --ink: #14202b;
-    --ink-soft: #4a5a68;
-    --line: #dfe0d8;
-    --line-soft: #ecece4;
+    --ink: #1c2530;
+    --ink-soft: #57616d;
+    --line: #dcdad3;
+    --line-soft: #ececea;
     --good: #2d6a4f;
     --radius: 10px;
   }
@@ -49,14 +52,34 @@
     border-bottom: 5px solid var(--gold);
   }
 
+  .header-top-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 0 0 6px;
+  }
+
   .eyebrow {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11.5px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--gold);
-    margin: 0 0 6px;
+    margin: 0;
   }
+
+  .contact-link {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    color: #cfd9e2;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(207, 217, 226, 0.4);
+    white-space: nowrap;
+  }
+  .contact-link:hover { color: #fff; border-bottom-color: #fff; }
 
   h1.wordmark {
     font-family: 'Fraunces', serif;
@@ -501,7 +524,10 @@
 <div id="app">
   <header class="top">
     <div class="wrap">
-      <p class="eyebrow">Haas · rides board</p>
+      <div class="header-top-row">
+        <p class="eyebrow">Haas · rides board</p>
+        <a class="contact-link" href="mailto:eason_han@berkeley.edu">Bug or issue? Email eason_han@berkeley.edu</a>
+      </div>
       <h1 class="wordmark">TripMatch</h1>
       <p class="tagline">Post a trip, see who else is going your way. No more scrolling the group chat.</p>
       <div class="stat-row" id="statRow"></div>
@@ -573,19 +599,24 @@
   var REGION_PRIORITY = { "East Bay / Campus": 0, "San Francisco": 1, "Peninsula": 2, "South Bay": 3 };
   function regionRank(r) { return REGION_PRIORITY.hasOwnProperty(r) ? REGION_PRIORITY[r] : 99; }
 
+  // Every swatch here is a tint along a single Haas Blue → California Gold
+  // scale, keyed to how far apart the two regions are (same region = neutral
+  // slate; East Bay ↔ South Bay, the longest hop, gets full gold) — so the
+  // color itself carries meaning ("how far is this trip") instead of just
+  // being a rainbow of unrelated hues.
   var ROUTE_COLORS = {
-    "East Bay / Campus|East Bay / Campus": { accent: "#1f8a8c", bg: "#e3f4f4" },
-    "East Bay / Campus|San Francisco":     { accent: "#2f9e5c", bg: "#e8f5ec" },
-    "East Bay / Campus|Peninsula":         { accent: "#7c5cbf", bg: "#efe9fa" },
-    "East Bay / Campus|South Bay":         { accent: "#d9730d", bg: "#fdecd8" },
-    "San Francisco|San Francisco":         { accent: "#2f6fb0", bg: "#e7f0fa" },
-    "San Francisco|Peninsula":             { accent: "#c14c76", bg: "#fbe8ef" },
-    "San Francisco|South Bay":             { accent: "#4854c4", bg: "#e8e9fb" },
-    "Peninsula|Peninsula":                 { accent: "#5b6b7a", bg: "#eaedf0" },
-    "Peninsula|South Bay":                 { accent: "#a15c3e", bg: "#f6e9e2" },
-    "South Bay|South Bay":                 { accent: "#a67c1e", bg: "#f6eed9" }
+    "East Bay / Campus|East Bay / Campus": { accent: "#5b6b7a", bg: "#eef1f4" },
+    "East Bay / Campus|San Francisco":     { accent: "#0f4c75", bg: "#e5eef6" },
+    "East Bay / Campus|Peninsula":         { accent: "#8a7a3a", bg: "#f5f0dc" },
+    "East Bay / Campus|South Bay":         { accent: "#c8890a", bg: "#fdf1d2" },
+    "San Francisco|San Francisco":         { accent: "#4a7a94", bg: "#e6f1f5" },
+    "San Francisco|Peninsula":             { accent: "#1c6b8c", bg: "#e3eef3" },
+    "San Francisco|South Bay":             { accent: "#9c7a2e", bg: "#f7f0d8" },
+    "Peninsula|Peninsula":                 { accent: "#6b7a8a", bg: "#eef1f4" },
+    "Peninsula|South Bay":                 { accent: "#3a7a6e", bg: "#e8f1ec" },
+    "South Bay|South Bay":                 { accent: "#7a6a4a", bg: "#f2ede0" }
   };
-  var FALLBACK_ROUTE_COLOR = { accent: "#6b7280", bg: "#eef0f2" };
+  var FALLBACK_ROUTE_COLOR = { accent: "#57616d", bg: "#eef0f2" };
 
   function routeColor(originRegion, destRegion) {
     var a = originRegion, b = destRegion;
@@ -597,6 +628,15 @@
     return String(s || "").replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
+  }
+
+  // Ownership is a name match, not a login (see PRD non-goals) — but the
+  // original exact-string check meant "Eason" and "eason " (a trailing space
+  // or different casing typed on another visit) silently locked someone out
+  // of editing their own old posts. Trim + case-fold so that friction is
+  // gone; it's still just a good-faith match, not real auth.
+  function namesMatch(a, b) {
+    return !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
   }
 
   function todayISO() {
@@ -723,7 +763,7 @@
   function renderRow(p) {
     var comments = p.comments || [];
     var expanded = !!state.expanded[p.id];
-    var isOwner = !!(state.me && state.me.name && state.me.name === p.name);
+    var isOwner = namesMatch(state.me && state.me.name, p.name);
     var confirming = !!state.confirmingDelete[p.id];
     var html = '<div class="row" data-post-id="' + p.id + '">';
 

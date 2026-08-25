@@ -1,17 +1,17 @@
 # TripMatch — Product Requirements Document
 *(working title — carpool coordination for the Haas community)*
 
-**Author:** [Your name]
-**Status:** Draft v1.2 — updated after first external user feedback
+**Author:** Eason Han
+**Status:** Draft v1.3 — ready for external user testing
 **Last updated:** August 25, 2026
 
 ---
 
 ## Problem Statement
 
-Haas students regularly need ad hoc rides — recruiting treks into SF, weekend trips to and from the South Bay, Sunday returns to campus — but today this is coordinated entirely through word of mouth and scrolling the class WhatsApp chat. Requests get buried under unrelated messages, there's no way to see who else is going the same way at the same time, and finding a match requires either getting lucky with timing or posting redundant "does anyone have a car" messages. This wastes seats on trips that already have room, and it wastes students' money and time on solo rideshares or long transit connections when a matching classmate exists.
+Haas students regularly need ad hoc rides — day trips and treks into SF, weekend getaways to and from the South Bay, Sunday returns to campus — but today this is coordinated entirely through word of mouth and scrolling the class WhatsApp chat. Requests get buried under unrelated messages, there's no way to see who else is going the same way at the same time, and finding a match requires either getting lucky with timing or posting redundant "does anyone have a car" messages. This wastes seats on trips that already have room, and it wastes students' money and time on solo rideshares or long transit connections when a matching classmate exists.
 
-This isn't a new problem to solve from scratch — general-purpose carpool apps (Waze Carpool, various campus carpool startups) have tried and mostly failed or stayed niche, largely because they had to build trust and liquidity among strangers. The Haas cohort already has both: shared trust and naturally clustered travel patterns around specific events (treks, recruiting weeks, weekend commutes). The gap isn't "no carpool tool exists" — it's "no one has built the version that fits a small, trusted, high-overlap community" instead of a stranger marketplace.
+This isn't a new problem to solve from scratch — general-purpose carpool apps (Waze Carpool, various campus carpool startups) have tried and mostly failed or stayed niche, largely because they had to build trust and liquidity among strangers. The Haas cohort already has both: shared trust and naturally clustered travel patterns around specific events (treks, class events, weekend commutes). The gap isn't "no carpool tool exists" — it's "no one has built the version that fits a small, trusted, high-overlap community" instead of a stranger marketplace.
 
 ---
 
@@ -115,11 +115,4 @@ All three were validated locally against an isolated mock backend (multiple test
 - **What's the initial city-to-region lookup table, and who maintains it if a city is missing?** — needs a first-pass list (e.g., which cities count as "South Bay" vs. "Peninsula") before the categorization logic can be built. *(Product decision.)*
 - **"Remembered identity" is scoped to a single device/browser.** If a student posts from their laptop and later opens the link on their phone, they'll be asked for their name again. Worth deciding whether that's acceptable for v1 or needs a fix. *(Product decision — recommend accepting as a known v1 limitation.)*
 - **Does removing an expired post also need to notify anyone who had a pending interest in it?** — minor, but worth a quick decision so users aren't left wondering why a post disappeared. *(Product/design.)*
-- **Ownership is still just a name match, not a login.** Edit and Delete both reuse the same "remembered name on this device" check as before — so someone who edits their name mid-edit, or posts from a second device under a slightly different spelling, could end up unable to manage their own post (or, in theory, another Alice on a shared device could edit an Alice's post). Same trust trade-off the PRD already accepted for v1; worth revisiting only if it causes real confusion. *(Product decision — recommend accepting as a known limitation, same as the single-device identity question above.)*
-
----
-
-## Timeline Considerations
-
-- Target build window: 2–4 weeks, aiming for a usable v1 in market by mid-to-late September, ahead of the busiest recruiting-trek season and before your own interview prep window narrows.
-- No external hard deadline — but real usage data is most valuable if the tool is live during an actual high-travel period (recruiting treks, a recruiting-adjacent weekend), so earlier is meaningfully better than later.
+- **Ownership is still just a name match, not a login.** Edit and Delete both reuse the same "remembered name on this device" check as before — the match is now trim + case-insensitive (a fix for the exact-string version silently locking people out over a typo'd space or capitalization), but it's still not real auth: posting from a second device, or under a name spelled differently enough to not fuzzy-match, means that post can no longer be edited or deleted at all — there's no "claim this post" flow. Same trust trade-off the PRD already accepted for v1; worth revisiting only if it causes real confusion. *(Product decision — recommend accepting as a known limitation, same as the single-device identity question above.)*
