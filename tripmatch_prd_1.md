@@ -2,8 +2,8 @@
 *(working title — carpool coordination for the Haas community)*
 
 **Author:** [Your name]
-**Status:** Draft v1.1 — updated with resolved open questions
-**Last updated:** August 22, 2026
+**Status:** Draft v1.2 — updated after first external user feedback
+**Last updated:** August 25, 2026
 
 ---
 
@@ -12,6 +12,18 @@
 Haas students regularly need ad hoc rides — recruiting treks into SF, weekend trips to and from the South Bay, Sunday returns to campus — but today this is coordinated entirely through word of mouth and scrolling the class WhatsApp chat. Requests get buried under unrelated messages, there's no way to see who else is going the same way at the same time, and finding a match requires either getting lucky with timing or posting redundant "does anyone have a car" messages. This wastes seats on trips that already have room, and it wastes students' money and time on solo rideshares or long transit connections when a matching classmate exists.
 
 This isn't a new problem to solve from scratch — general-purpose carpool apps (Waze Carpool, various campus carpool startups) have tried and mostly failed or stayed niche, largely because they had to build trust and liquidity among strangers. The Haas cohort already has both: shared trust and naturally clustered travel patterns around specific events (treks, recruiting weeks, weekend commutes). The gap isn't "no carpool tool exists" — it's "no one has built the version that fits a small, trusted, high-overlap community" instead of a stranger marketplace.
+
+---
+
+## Post-Launch Update — External User Feedback (Aug 25, 2026)
+
+V1 shipped and got its first round of real external usage from the Haas cohort. Three gaps surfaced immediately once real posts started accumulating on the shared board:
+
+1. **No way to remove a post.** A rider whose plans fell through, or a driver whose seats filled up off-platform, had no way to take their post down — stale entries just sat on the board until they aged out at midnight on the trip date. *(Shipped just before this round, in [5619f93](https://github.com/easonhanyc/tripmatch/commit/5619f933fa7b1b59fb9d0d18404fbfd1064bbcf9): a Delete button appears only on posts matching the viewer's remembered name, and requires a second "Yes, delete" tap before it actually removes the post.)*
+2. **No way to correct a post.** If a detail changed — a later pickup time, one more open seat, a different notes line — the only fix was deleting the post and re-posting from scratch, losing any comments already on it. **Added this round:** an Edit button next to Delete, scoped to the same owner check, that reopens the post form pre-filled and updates the existing entry (including its custom "other city" values) in place, preserving its comment thread and posted-at time.
+3. **The board doesn't scale with volume.** The original design grouped posts by route + date and just listed every group top to bottom — fine for a handful of posts, but as the board fills up across several trip dates, finding "just Friday's trips" means scrolling past everything else. **Added this round:** a horizontal row of date chips above the board (e.g. "Tue, Aug 25 · 3", "Fri, Aug 28 · 1") that let a viewer jump straight to one day's trips. It only appears once the board actually spans more than one date — with a single date it would be redundant with "All dates" — and it composes with the existing offering/looking-for-a-ride filter rather than replacing it.
+
+All three were validated locally against an isolated mock backend (multiple test personas posting, editing, filtering by date, and deleting) before shipping, so the shared production board was never touched during testing.
 
 ---
 
@@ -43,6 +55,9 @@ This isn't a new problem to solve from scratch — general-purpose carpool apps 
 - As a student who just posted, I want a ready-to-paste summary of my request so I can drop it back into the WhatsApp chat without retyping it.
 - As a student, I want to be notified if a match appears in my category after I've posted, so I don't have to keep checking back.
 - As a returning user, I want the app to remember my name after my first post so that I don't have to retype it every time I use it.
+- As a poster whose plans fell through, I want to remove my own post so the board doesn't show a trip that's no longer happening.
+- As a poster whose details changed, I want to edit my own post in place so I don't have to delete and repost (losing any comments) just to fix a time or seat count.
+- As a student browsing a board with many trip dates active at once, I want to jump straight to one date's trips so I don't have to scroll past everything else to find mine.
 
 ---
 
@@ -61,6 +76,9 @@ This isn't a new problem to solve from scratch — general-purpose carpool apps 
 | Shareable output text | Given a user submits a post, when submission completes, then the system generates a pre-formatted text summary the user can copy and paste into WhatsApp. |
 | Shareable app link | Given the app is deployed, when accessed via a shared link, then it loads without requiring app installation. |
 | Post expiration | Given a post's trip date has passed, when the system runs its daily cleanup check, then the post is automatically removed from the board. |
+| Owner-only post deletion | Given a post exists, when the viewer's remembered name matches the post's poster name, then a Delete control is shown; deleting requires a second confirmation step before the post is removed from shared storage. |
+| Owner-only post editing | Given a post exists and the viewer is its owner (by the same name match as deletion), then an Edit control is shown that reopens the post form pre-filled with the post's current values; saving updates the existing entry in place, preserving its comments and original post time. |
+| Date-filter summary row | Given the board has posts spanning more than one trip date, when a viewer opens the board, then a row of date chips (each showing the date and its post count) appears above the grouped list, and selecting one narrows the board to that date; the row is hidden when only one date is present. |
 
 ### Nice-to-Have (P1)
 
@@ -97,6 +115,7 @@ This isn't a new problem to solve from scratch — general-purpose carpool apps 
 - **What's the initial city-to-region lookup table, and who maintains it if a city is missing?** — needs a first-pass list (e.g., which cities count as "South Bay" vs. "Peninsula") before the categorization logic can be built. *(Product decision.)*
 - **"Remembered identity" is scoped to a single device/browser.** If a student posts from their laptop and later opens the link on their phone, they'll be asked for their name again. Worth deciding whether that's acceptable for v1 or needs a fix. *(Product decision — recommend accepting as a known v1 limitation.)*
 - **Does removing an expired post also need to notify anyone who had a pending interest in it?** — minor, but worth a quick decision so users aren't left wondering why a post disappeared. *(Product/design.)*
+- **Ownership is still just a name match, not a login.** Edit and Delete both reuse the same "remembered name on this device" check as before — so someone who edits their name mid-edit, or posts from a second device under a slightly different spelling, could end up unable to manage their own post (or, in theory, another Alice on a shared device could edit an Alice's post). Same trust trade-off the PRD already accepted for v1; worth revisiting only if it causes real confusion. *(Product decision — recommend accepting as a known limitation, same as the single-device identity question above.)*
 
 ---
 

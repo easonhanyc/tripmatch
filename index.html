@@ -98,6 +98,32 @@
 
   main { padding-top: 22px; }
 
+  .date-chips {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    padding: 2px 2px 10px;
+    margin-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .date-chips.hidden { display: none; }
+  .date-chip {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    padding: 7px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .date-chip:hover { background: var(--line-soft); }
+  .date-chip.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .date-chip .chip-count { opacity: 0.75; margin-left: 4px; }
+
   .board-header {
     display: flex;
     align-items: baseline;
@@ -205,6 +231,20 @@
     white-space: nowrap;
   }
   .delete-btn:hover { background: #fdecea; border-color: #f3b9b0; }
+
+  .edit-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    color: var(--founders);
+    padding: 6px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .edit-btn:hover { background: var(--line-soft); border-color: var(--founders); }
 
   .row-confirm {
     display: flex;
@@ -473,6 +513,7 @@
       This board isn't connected to a backend yet — open index.html and fill in
       <code>JSONBIN_BIN_ID</code> / <code>JSONBIN_KEY</code> near the top of the script.
     </div>
+    <div class="date-chips hidden" id="dateChips"></div>
     <div class="board-header">
       <h2>Open trips</h2>
       <span id="boardMeta"></span>
@@ -640,7 +681,7 @@
   // expanded: postId -> true, tracks which posts have their comments open.
   // confirmingDelete: postId -> true, tracks which posts are showing the
   // "are you sure?" bar (the required second step before an actual delete).
-  var state = { posts: [], me: null, filter: null, expanded: {}, confirmingDelete: {} };
+  var state = { posts: [], me: null, filter: null, dateFilter: null, expanded: {}, confirmingDelete: {} };
 
   async function init() {
     state.me = loadMe();
@@ -704,6 +745,7 @@
     html += '<button class="comment-btn' + (comments.length ? ' has-comments' : '') + '" data-id="' + p.id + '">💬 ' + comments.length + '</button>';
     html += '<button class="copy-btn" data-id="' + p.id + '">Copy for WhatsApp</button>';
     if (isOwner) {
+      html += '<button class="edit-btn" data-id="' + p.id + '">Edit</button>';
       html += '<button class="delete-btn" data-id="' + p.id + '">Delete</button>';
     }
     html += '</div>';
@@ -755,9 +797,50 @@
       el.addEventListener("click", function (e) {
         e.preventDefault();
         state.filter = null;
+        state.dateFilter = null;
         render();
       });
     }
+  }
+
+  // The date-chip row is a second, orthogonal way to narrow the board (by
+  // day) alongside the existing role filter — it's the fix for boards that
+  // have piled up across several trip dates, where scrolling to find "just
+  // Friday" gets tedious. It only shows once there's more than one date on
+  // the board; with a single date it would just duplicate "All dates".
+  function renderDateChips() {
+    var container = document.getElementById("dateChips");
+    if (!container) return;
+
+    var counts = {};
+    state.posts.forEach(function (p) {
+      if (state.filter && p.role !== state.filter) return;
+      counts[p.date] = (counts[p.date] || 0) + 1;
+    });
+    var dates = Object.keys(counts).sort();
+
+    if (state.posts.length === 0 || dates.length <= 1) {
+      container.classList.add("hidden");
+      container.innerHTML = "";
+      if (dates.indexOf(state.dateFilter) === -1) state.dateFilter = null;
+      return;
+    }
+
+    container.classList.remove("hidden");
+    var html = '<button type="button" class="date-chip' + (!state.dateFilter ? " active" : "") + '" data-date="">All dates</button>';
+    dates.forEach(function (d) {
+      html += '<button type="button" class="date-chip' + (state.dateFilter === d ? " active" : "") + '" data-date="' + d + '">' +
+        formatDate(d) + ' <span class="chip-count">' + counts[d] + '</span></button>';
+    });
+    container.innerHTML = html;
+
+    Array.prototype.forEach.call(container.querySelectorAll(".date-chip"), function (btn) {
+      btn.addEventListener("click", function () {
+        var d = btn.getAttribute("data-date");
+        state.dateFilter = (!d || state.dateFilter === d) ? null : d;
+        render();
+      });
+    });
   }
 
   function render() {
@@ -779,6 +862,8 @@
     var board = document.getElementById("board");
     var meta = document.getElementById("boardMeta");
 
+    renderDateChips();
+
     if (state.posts.length === 0) {
       meta.textContent = "";
       board.innerHTML =
@@ -789,7 +874,16 @@
       return;
     }
 
-    var visiblePosts = state.filter ? state.posts.filter(function (p) { return p.role === state.filter; }) : state.posts;
+    var visiblePosts = state.posts.filter(function (p) {
+      if (state.filter && p.role !== state.filter) return false;
+      if (state.dateFilter && p.date !== state.dateFilter) return false;
+      return true;
+    });
+
+    var filterLabels = [];
+    if (state.filter) filterLabels.push(state.filter === "driver" ? "offering seats" : "looking for a ride");
+    if (state.dateFilter) filterLabels.push(formatDate(state.dateFilter));
+    var hasFilter = filterLabels.length > 0;
 
     if (visiblePosts.length === 0) {
       meta.innerHTML = 'No trips match this filter <a href="#" id="clearFilterLink">(clear filter)</a>';
@@ -804,9 +898,8 @@
 
     var groups = groupPosts(visiblePosts);
     var metaText = groups.length + " route" + (groups.length === 1 ? "" : "s") + " active";
-    if (state.filter) {
-      var filterLabel = state.filter === "driver" ? "offering seats" : "looking for a ride";
-      meta.innerHTML = metaText + ' · showing: ' + filterLabel + ' <a href="#" id="clearFilterLink">(clear)</a>';
+    if (hasFilter) {
+      meta.innerHTML = metaText + ' · showing: ' + filterLabels.join(", ") + ' <a href="#" id="clearFilterLink">(clear)</a>';
     } else {
       meta.textContent = metaText;
     }
@@ -836,6 +929,13 @@
         var id = btn.getAttribute("data-id");
         state.expanded[id] = !state.expanded[id];
         render();
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".edit-btn"), function (btn) {
+      btn.addEventListener("click", function () {
+        var post = state.posts.find(function (p) { return String(p.id) === btn.getAttribute("data-id"); });
+        if (post) openSheet(post);
       });
     });
 
@@ -1012,13 +1112,14 @@
     minuteSel.innerHTML = m;
   }
 
-  function openSheet() {
+  function openSheet(editPost) {
+    var isEdit = !!editPost;
     var backdrop = document.createElement("div");
     backdrop.className = "sheet-backdrop";
     backdrop.innerHTML =
       '<div class="sheet">' +
-      '<h3>Post a trip</h3>' +
-      '<p class="sub">Takes about 15 seconds. Visible to everyone with this link.</p>' +
+      '<h3>' + (isEdit ? "Edit your trip" : "Post a trip") + '</h3>' +
+      '<p class="sub">' + (isEdit ? "Update the details below — everyone with this link will see the change." : "Takes about 15 seconds. Visible to everyone with this link.") + '</p>' +
       '<form id="tripForm">' +
 
       '<label>Your name<input type="text" id="f_name" required>' +
@@ -1055,7 +1156,7 @@
 
       '<div class="submit-row">' +
       '<button type="button" class="btn-secondary" id="cancelBtn">Cancel</button>' +
-      '<button type="submit" class="btn-primary">Post trip</button>' +
+      '<button type="submit" class="btn-primary">' + (isEdit ? "Save changes" : "Post trip") + '</button>' +
       '</div>' +
       '</form>' +
       '</div>';
@@ -1068,22 +1169,51 @@
     buildCitySelect(destSel);
     buildTimeSelects(backdrop.querySelector("#f_hour"), backdrop.querySelector("#f_minute"));
 
-    // prefill known identity
-    if (state.me) {
+    // prefill known identity, or the post being edited
+    if (isEdit) {
+      backdrop.querySelector("#f_name").value = editPost.name || "";
+    } else if (state.me) {
       backdrop.querySelector("#f_name").value = state.me.name || "";
     }
     var dateInput = backdrop.querySelector("#f_date");
     dateInput.min = todayISO();
 
     var role = null;
-    Array.prototype.forEach.call(backdrop.querySelectorAll(".role-opt"), function (opt) {
-      opt.addEventListener("click", function () {
-        role = opt.getAttribute("data-role");
-        Array.prototype.forEach.call(backdrop.querySelectorAll(".role-opt"), function (o) { o.classList.remove("active"); });
-        opt.classList.add("active");
-        backdrop.querySelector("#seatsWrap").classList.toggle("hidden", role !== "driver");
+    function setRole(r) {
+      role = r;
+      Array.prototype.forEach.call(backdrop.querySelectorAll(".role-opt"), function (o) {
+        o.classList.toggle("active", o.getAttribute("data-role") === r);
       });
+      backdrop.querySelector("#seatsWrap").classList.toggle("hidden", role !== "driver");
+    }
+    Array.prototype.forEach.call(backdrop.querySelectorAll(".role-opt"), function (opt) {
+      opt.addEventListener("click", function () { setRole(opt.getAttribute("data-role")); });
     });
+
+    function setCity(selectEl, otherWrapId, otherInputId, city) {
+      var hasOption = Array.prototype.some.call(selectEl.options, function (o) { return o.value === city; });
+      if (hasOption) {
+        selectEl.value = city;
+      } else {
+        selectEl.value = "__other__";
+        backdrop.querySelector(otherInputId).value = city;
+      }
+      backdrop.querySelector(otherWrapId).classList.toggle("hidden", selectEl.value !== "__other__");
+    }
+
+    if (isEdit) {
+      setRole(editPost.role);
+      if (editPost.role === "driver") backdrop.querySelector("#f_seats").value = editPost.seats;
+      setCity(originSel, "#originOtherWrap", "#f_originOther", editPost.originCity);
+      setCity(destSel, "#destOtherWrap", "#f_destOther", editPost.destCity);
+      dateInput.value = editPost.date;
+      if (editPost.time) {
+        var tparts = editPost.time.split(":");
+        backdrop.querySelector("#f_hour").value = tparts[0] || "";
+        backdrop.querySelector("#f_minute").value = tparts[1] || "";
+      }
+      if (editPost.notes) backdrop.querySelector("#f_notes").value = editPost.notes;
+    }
 
     originSel.addEventListener("change", function () {
       backdrop.querySelector("#originOtherWrap").classList.toggle("hidden", originSel.value !== "__other__");
@@ -1129,8 +1259,7 @@
         }
       }
 
-      var post = {
-        id: Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+      var fields = {
         name: name,
         role: role,
         seats: seats,
@@ -1140,18 +1269,36 @@
         originCity: originCity,
         destCity: destCity,
         originRegion: regionOf(originCity),
-        destRegion: regionOf(destCity),
-        createdAt: Date.now(),
-        comments: []
+        destRegion: regionOf(destCity)
       };
 
       var submitBtn = backdrop.querySelector('button[type="submit"]');
       submitBtn.disabled = true;
-      submitBtn.textContent = "Posting…";
+      submitBtn.textContent = isEdit ? "Saving…" : "Posting…";
 
       var current = await loadPosts();
-      current.push(post);
-      var result = await savePosts(current);
+      var result;
+
+      if (isEdit) {
+        var idx = current.findIndex(function (p) { return String(p.id) === String(editPost.id); });
+        if (idx === -1) {
+          errEl.textContent = "This post was removed — refresh the page.";
+          errEl.classList.remove("hidden");
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Save changes";
+          return;
+        }
+        current[idx] = Object.assign({}, current[idx], fields);
+        result = await savePosts(current);
+      } else {
+        var post = Object.assign({
+          id: Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+          createdAt: Date.now(),
+          comments: []
+        }, fields);
+        current.push(post);
+        result = await savePosts(current);
+      }
 
       if (!result.ok) {
         if (result.reason === "unconfigured") {
@@ -1161,7 +1308,7 @@
         }
         errEl.classList.remove("hidden");
         submitBtn.disabled = false;
-        submitBtn.textContent = "Post trip";
+        submitBtn.textContent = isEdit ? "Save changes" : "Post trip";
         return;
       }
 
@@ -1170,14 +1317,14 @@
 
       var today = todayISO();
       state.posts = current.filter(function (p) { return p.date >= today; });
-      state.filter = null;
+      if (!isEdit) state.filter = null;
 
       document.body.removeChild(backdrop);
       render();
     });
   }
 
-  document.getElementById("openFab").addEventListener("click", openSheet);
+  document.getElementById("openFab").addEventListener("click", function () { openSheet(); });
 
   init();
 })();
