@@ -593,35 +593,43 @@
 
   function regionOf(city) { return CITY_TO_REGION[city] || "Other"; }
 
-  // Route colors: keyed by the two regions sorted into a canonical order, so
-  // a corridor reads as the same color in both directions (EB→SF and SF→EB
-  // are "the same route" for recognition purposes).
-  var REGION_PRIORITY = { "East Bay / Campus": 0, "San Francisco": 1, "Peninsula": 2, "South Bay": 3 };
-  function regionRank(r) { return REGION_PRIORITY.hasOwnProperty(r) ? REGION_PRIORITY[r] : 99; }
-
-  // Every swatch here is a tint along a single Haas Blue → California Gold
-  // scale, keyed to how far apart the two regions are (same region = neutral
-  // slate; East Bay ↔ South Bay, the longest hop, gets full gold) — so the
-  // color itself carries meaning ("how far is this trip") instead of just
-  // being a rainbow of unrelated hues.
+  // Route colors are keyed by direction now, not by an unordered region
+  // pair — East Bay→South Bay and South Bay→East Bay are two different
+  // groups on the board (see groupPosts' key below) and now read as two
+  // different, if related, colors instead of being forced identical. Each
+  // corridor gets one saturated hue; its two directions are a lighter and a
+  // deeper shade of that same hue, so "same corridor" is still recognizable
+  // at a glance while direction is too. Same-region hops (a self-loop has no
+  // real reverse direction) stay a calmer, less saturated slate on purpose —
+  // that contrast is what makes the real corridors read as "a real trip."
   var ROUTE_COLORS = {
-    "East Bay / Campus|East Bay / Campus": { accent: "#5b6b7a", bg: "#eef1f4" },
-    "East Bay / Campus|San Francisco":     { accent: "#0f4c75", bg: "#e5eef6" },
-    "East Bay / Campus|Peninsula":         { accent: "#8a7a3a", bg: "#f5f0dc" },
-    "East Bay / Campus|South Bay":         { accent: "#c8890a", bg: "#fdf1d2" },
-    "San Francisco|San Francisco":         { accent: "#4a7a94", bg: "#e6f1f5" },
-    "San Francisco|Peninsula":             { accent: "#1c6b8c", bg: "#e3eef3" },
-    "San Francisco|South Bay":             { accent: "#9c7a2e", bg: "#f7f0d8" },
-    "Peninsula|Peninsula":                 { accent: "#6b7a8a", bg: "#eef1f4" },
-    "Peninsula|South Bay":                 { accent: "#3a7a6e", bg: "#e8f1ec" },
-    "South Bay|South Bay":                 { accent: "#7a6a4a", bg: "#f2ede0" }
+    "East Bay / Campus|East Bay / Campus": { accent: "#55606e", bg: "#eef1f4" },
+    "San Francisco|San Francisco":         { accent: "#4d6b76", bg: "#e9f2f3" },
+    "Peninsula|Peninsula":                 { accent: "#6b6357", bg: "#f2efe7" },
+    "South Bay|South Bay":                 { accent: "#6e5f4a", bg: "#f2ede2" },
+
+    "East Bay / Campus|San Francisco":     { accent: "#1e5fb8", bg: "#e3eefb" },
+    "San Francisco|East Bay / Campus":     { accent: "#123f80", bg: "#e1e9f5" },
+
+    "East Bay / Campus|Peninsula":         { accent: "#7c4fc9", bg: "#f0e9fb" },
+    "Peninsula|East Bay / Campus":         { accent: "#55308f", bg: "#ece3f6" },
+
+    "East Bay / Campus|South Bay":         { accent: "#c8890a", bg: "#fbf0d6" },
+    "South Bay|East Bay / Campus":         { accent: "#8f5e05", bg: "#f5ecd6" },
+
+    "San Francisco|Peninsula":             { accent: "#12896f", bg: "#e1f5ef" },
+    "Peninsula|San Francisco":             { accent: "#0b5c4c", bg: "#dcefe9" },
+
+    "San Francisco|South Bay":             { accent: "#c23a5e", bg: "#fae6ec" },
+    "South Bay|San Francisco":             { accent: "#8a2542", bg: "#f4e1e7" },
+
+    "Peninsula|South Bay":                 { accent: "#c45a1f", bg: "#fbe9dc" },
+    "South Bay|Peninsula":                 { accent: "#8a3d12", bg: "#f3e2d5" }
   };
   var FALLBACK_ROUTE_COLOR = { accent: "#57616d", bg: "#eef0f2" };
 
   function routeColor(originRegion, destRegion) {
-    var a = originRegion, b = destRegion;
-    if (regionRank(b) < regionRank(a)) { var tmp = a; a = b; b = tmp; }
-    return ROUTE_COLORS[a + "|" + b] || FALLBACK_ROUTE_COLOR;
+    return ROUTE_COLORS[originRegion + "|" + destRegion] || FALLBACK_ROUTE_COLOR;
   }
 
   function escapeHtml(s) {
