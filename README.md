@@ -2,7 +2,7 @@
 
 A shared rides board for the Haas community — post a trip, see who else is going your way, skip the group-chat scroll.
 
-**Live app:** https://easonhanyc.github.io/tripmatch/
+**Live app:** https://tripmatch-app.github.io/
 
 ## What it does
 
@@ -13,6 +13,7 @@ Anyone with the link can post a trip — offering seats or looking for a ride �
 - **Post a trip** — name, role (driving / need a ride), origin and destination city, date, optional time and notes
 - **Grouped, filterable board** — routes grouped by region + date, with one-click filters for role and date
 - **Comments** — ask a question on someone's post without leaving the page
+- **+1 a post** — fit an existing trip exactly? Count yourself in instead of posting a duplicate
 - **Edit or delete your own post** — matched by the name you posted under, with a two-step confirm before anything is deleted
 - **Copy for WhatsApp** — a ready-to-paste summary of your post for the group chat
 - **Automatic expiry** — a post disappears from the board once its trip date has passed
