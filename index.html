@@ -408,23 +408,6 @@
   .cities { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
   .notes { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; font-style: italic; }
 
-  .copy-btn {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.03em;
-    background: var(--paper);
-    border: 1px solid var(--line);
-    color: var(--blue);
-    padding: 6px 9px;
-    border-radius: 7px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s, transform 0.1s;
-  }
-  .copy-btn:hover { background: var(--line-soft); }
-  .copy-btn:active { transform: scale(0.97); }
-  .copy-btn.copied { background: var(--good); color: #fff; border-color: var(--good); }
-
   .setup-banner {
     background: #fff3cd;
     border: 1px solid #e8c468;
@@ -622,11 +605,6 @@
   "use strict";
 
   var ME_KEY = "tripmatch-me";
-
-  // Hardcoded rather than window.location.href — the page can be opened
-  // through previews/embeds where the browser's own URL isn't the real
-  // published link (e.g. a sandboxed preview reports a giant data: URL).
-  var APP_URL = "https://tripmatch-app.github.io/";
 
   // ---- shared board backend (jsonbin.io) ----
   // 1. Create a free account at https://jsonbin.io
@@ -865,7 +843,6 @@
     var plusOneTitle = plusOnes.length ? plusOnes.map(function (po) { return po.name; }).join(', ') : 'Also going this way? Count yourself in.';
     html += '<button type="button" class="' + plusOneClass + '" data-id="' + p.id + '"' + (isOwner ? ' disabled title="This is your own post"' : ' title="' + escapeHtml(plusOneTitle) + '"') + '>' + plusOneLabel + '</button>';
     html += '<button class="comment-btn' + (comments.length ? ' has-comments' : '') + '" data-id="' + p.id + '">💬 ' + comments.length + '</button>';
-    html += '<button class="copy-btn" data-id="' + p.id + '">Copy for WhatsApp</button>';
     if (isOwner) {
       html += '<button class="edit-btn" data-id="' + p.id + '">Edit</button>';
       html += '<button class="delete-btn" data-id="' + p.id + '">Delete</button>';
@@ -1050,13 +1027,6 @@
       html += '</div>';
     });
     board.innerHTML = html;
-
-    Array.prototype.forEach.call(document.querySelectorAll(".copy-btn"), function (btn) {
-      btn.addEventListener("click", function () {
-        var post = state.posts.find(function (p) { return String(p.id) === btn.getAttribute("data-id"); });
-        if (post) copyText(buildShareText(post), btn);
-      });
-    });
 
     Array.prototype.forEach.call(document.querySelectorAll(".comment-btn"), function (btn) {
       btn.addEventListener("click", function () {
@@ -1263,52 +1233,6 @@
     });
 
     wireClearFilterLink();
-  }
-
-  function buildShareText(p) {
-    var roleLine = p.role === "driver"
-      ? "🚗 Offering a ride — " + p.seats + " seat" + (p.seats == 1 ? "" : "s") + " open"
-      : "🙋 Looking for a ride";
-    var lines = [
-      roleLine,
-      p.originCity + " → " + p.destCity + " (" + p.originRegion + " → " + p.destRegion + ")",
-      formatDate(p.date) + (p.time ? " · " + formatTime(p.time) : "")
-    ];
-    if (p.notes) lines.push("Note: " + p.notes);
-    lines.push("Posted by " + p.name);
-    lines.push("");
-    lines.push("Find a match: " + APP_URL);
-    return lines.join("\n");
-  }
-
-  function copyText(text, btn) {
-    var done = function () {
-      var original = btn.textContent;
-      btn.textContent = "Copied ✓";
-      btn.classList.add("copied");
-      setTimeout(function () { btn.textContent = original; btn.classList.remove("copied"); }, 1600);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
-    } else {
-      fallbackCopy(text, done);
-    }
-  }
-
-  function fallbackCopy(text, done) {
-    try {
-      var ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.focus(); ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      done();
-    } catch (e) {
-      window.prompt("Copy this text manually:", text);
-    }
   }
 
   // ---------- form sheet ----------

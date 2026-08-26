@@ -15,7 +15,6 @@ Anyone with the link can post a trip — offering seats or looking for a ride �
 - **Comments** — ask a question on someone's post without leaving the page
 - **+1 a post** — fit an existing trip exactly? Count yourself in instead of posting a duplicate
 - **Edit or delete your own post** — matched by the name you posted under, with a two-step confirm before anything is deleted
-- **Copy for WhatsApp** — a ready-to-paste summary of your post for the group chat
 - **Automatic expiry** — a post disappears from the board once its trip date has passed
 
 ## How it's built

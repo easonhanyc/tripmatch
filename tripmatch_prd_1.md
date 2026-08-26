@@ -52,7 +52,6 @@ All three were validated locally against an isolated mock backend (multiple test
 - As a student without a car, I want to post my trip need (date, time, origin, destination) so that others going the same way can see it.
 - As a student with a car, I want to indicate that I'm driving and how many seats I have so that others can find and join me.
 - As a student browsing, I want to see requests and offers grouped by route and date so I can find a match without reading unrelated posts.
-- As a student who just posted, I want a ready-to-paste summary of my request so I can drop it back into the WhatsApp chat without retyping it.
 - As a student, I want to be notified if a match appears in my category after I've posted, so I don't have to keep checking back.
 - As a returning user, I want the app to remember my name after my first post so that I don't have to retype it every time I use it.
 - As a poster whose plans fell through, I want to remove my own post so the board doesn't show a trip that's no longer happening.
@@ -74,7 +73,6 @@ All three were validated locally against an isolated mock backend (multiple test
 | Driver capacity capture | Given a user selects "I'm driving," when they submit the form, then they must also enter number of available seats. |
 | City-to-region categorization | Given a new entry is submitted, when the user selects a specific city as origin or destination (e.g., Sunnyvale, Mountain View, Palo Alto), then the system maps that city to its broader region (e.g., South Bay) using a fixed lookup table, and buckets the entry into a category by region + date (e.g., "Outbound: Berkeley → South Bay, Fri 8/28"). |
 | Grouped board view | Given entries exist, when a user views the board, then entries are displayed grouped by category and sorted by date/time, with drivers and riders visibly distinguished, and each entry shows the poster's name and specific city. |
-| Shareable output text | Given a user submits a post, when submission completes, then the system generates a pre-formatted text summary the user can copy and paste into WhatsApp. |
 | Shareable app link | Given the app is deployed, when accessed via a shared link, then it loads without requiring app installation. |
 | Post expiration | Given a post's trip date has passed, when the system runs its daily cleanup check, then the post is automatically removed from the board. |
 | Owner-only post deletion | Given a post exists, when the viewer's remembered name matches the post's poster name, then a Delete control is shown; deleting requires a second confirmation step before the post is removed from shared storage. |
