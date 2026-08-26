@@ -58,6 +58,7 @@ All three were validated locally against an isolated mock backend (multiple test
 - As a poster whose plans fell through, I want to remove my own post so the board doesn't show a trip that's no longer happening.
 - As a poster whose details changed, I want to edit my own post in place so I don't have to delete and repost (losing any comments) just to fix a time or seat count.
 - As a student browsing a board with many trip dates active at once, I want to jump straight to one date's trips so I don't have to scroll past everything else to find mine.
+- As a student who fits an existing trip exactly, I want to +1 it so the poster sees interest without a redundant duplicate post cluttering the board.
 
 ---
 
@@ -79,6 +80,7 @@ All three were validated locally against an isolated mock backend (multiple test
 | Owner-only post deletion | Given a post exists, when the viewer's remembered name matches the post's poster name, then a Delete control is shown; deleting requires a second confirmation step before the post is removed from shared storage. |
 | Owner-only post editing | Given a post exists and the viewer is its owner (by the same name match as deletion), then an Edit control is shown that reopens the post form pre-filled with the post's current values; saving updates the existing entry in place, preserving its comments and original post time. |
 | Date-filter summary row | Given the board has posts spanning more than one trip date, when a viewer opens the board, then a row of date chips (each showing the date and its post count) appears above the grouped list, and selecting one narrows the board to that date; the row is hidden when only one date is present. |
+| Interest counter ("+1") | Given a post exists and the viewer is not its owner, then a "+1" control shows the running count of others also interested; tapping it toggles the viewer's own name on/off that list (prompting for a name first if none is remembered yet) instead of requiring a brand-new duplicate post. |
 
 ### Nice-to-Have (P1)
 

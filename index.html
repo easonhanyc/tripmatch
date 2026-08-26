@@ -241,6 +241,73 @@
   .comment-btn:hover { background: var(--line-soft); }
   .comment-btn.has-comments { color: var(--blue); border-color: var(--blue); }
 
+  .plusone-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    padding: 6px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .plusone-btn:hover { background: var(--line-soft); }
+  .plusone-btn.has-plusones { color: var(--gold-deep); border-color: var(--gold-deep); }
+  .plusone-btn.joined { background: #fff8e6; color: var(--gold-deep); border-color: var(--gold-deep); }
+  .plusone-btn:disabled { opacity: 0.6; cursor: default; }
+
+  .row-plusone-prompt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: #fff8e6;
+    border-top: 1px solid var(--gold-deep);
+    font-size: 13px;
+    color: #6b4a06;
+  }
+  .row-plusone-prompt > span { flex: 1 1 100%; }
+  .plusone-form { display: flex; gap: 8px; flex: 1 1 100%; flex-wrap: wrap; }
+  .plusone-name-input {
+    flex: 1;
+    min-width: 120px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13.5px;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #fff;
+    color: var(--ink);
+  }
+  .plusone-form button[type="submit"] {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 7px 12px;
+    border-radius: 7px;
+    border: none;
+    background: var(--gold-deep);
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-cancel-plusone {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 7px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .row-plusone-prompt .plusone-err { width: 100%; margin: 0; }
+
   .delete-btn {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
@@ -729,7 +796,7 @@
   // expanded: postId -> true, tracks which posts have their comments open.
   // confirmingDelete: postId -> true, tracks which posts are showing the
   // "are you sure?" bar (the required second step before an actual delete).
-  var state = { posts: [], me: null, filter: null, dateFilter: null, expanded: {}, confirmingDelete: {} };
+  var state = { posts: [], me: null, filter: null, dateFilter: null, expanded: {}, confirmingDelete: {}, plusOnePrompt: {} };
 
   async function init() {
     state.me = loadMe();
@@ -770,9 +837,12 @@
 
   function renderRow(p) {
     var comments = p.comments || [];
+    var plusOnes = p.plusOnes || [];
     var expanded = !!state.expanded[p.id];
     var isOwner = namesMatch(state.me && state.me.name, p.name);
     var confirming = !!state.confirmingDelete[p.id];
+    var plusOnePrompting = !!state.plusOnePrompt[p.id];
+    var joined = plusOnes.some(function (po) { return namesMatch(po.name, state.me && state.me.name); });
     var html = '<div class="row" data-post-id="' + p.id + '">';
 
     html += '<div class="row-summary">';
@@ -790,6 +860,10 @@
     if (p.notes) html += '<div class="notes">' + escapeHtml(p.notes) + '</div>';
     html += '</div>';
     html += '<div class="row-actions">';
+    var plusOneClass = 'plusone-btn' + (joined ? ' joined' : (plusOnes.length ? ' has-plusones' : ''));
+    var plusOneLabel = (joined ? '✓ ' : '') + '+1 · ' + plusOnes.length;
+    var plusOneTitle = plusOnes.length ? plusOnes.map(function (po) { return po.name; }).join(', ') : 'Also going this way? Count yourself in.';
+    html += '<button type="button" class="' + plusOneClass + '" data-id="' + p.id + '"' + (isOwner ? ' disabled title="This is your own post"' : ' title="' + escapeHtml(plusOneTitle) + '"') + '>' + plusOneLabel + '</button>';
     html += '<button class="comment-btn' + (comments.length ? ' has-comments' : '') + '" data-id="' + p.id + '">💬 ' + comments.length + '</button>';
     html += '<button class="copy-btn" data-id="' + p.id + '">Copy for WhatsApp</button>';
     if (isOwner) {
@@ -798,6 +872,18 @@
     }
     html += '</div>';
     html += '</div>'; // row-summary
+
+    if (plusOnePrompting) {
+      html += '<div class="row-plusone-prompt">';
+      html += '<span>Add your name to be counted in on this trip:</span>';
+      html += '<form class="plusone-form" data-id="' + p.id + '">';
+      html += '<input type="text" class="plusone-name-input" placeholder="Your name" maxlength="60" required>';
+      html += '<button type="submit">Count me in</button>';
+      html += '<button type="button" class="btn-cancel-plusone" data-id="' + p.id + '">Cancel</button>';
+      html += '</form>';
+      html += '<div class="plusone-err err hidden"></div>';
+      html += '</div>';
+    }
 
     if (confirming) {
       html += '<div class="row-confirm">';
@@ -976,6 +1062,102 @@
       btn.addEventListener("click", function () {
         var id = btn.getAttribute("data-id");
         state.expanded[id] = !state.expanded[id];
+        render();
+      });
+    });
+
+    // +1 is a lightweight "count me in too" — no separate post, just your
+    // name added to (or removed from) the trip's interest list. A first-time
+    // visitor with no remembered name gets a one-field inline prompt instead
+    // of being sent through the full post form.
+    Array.prototype.forEach.call(document.querySelectorAll(".plusone-btn"), function (btn) {
+      btn.addEventListener("click", async function () {
+        var id = btn.getAttribute("data-id");
+        if (!state.me || !state.me.name) {
+          state.plusOnePrompt[id] = true;
+          render();
+          return;
+        }
+
+        var name = state.me.name;
+        btn.disabled = true;
+
+        var current = await loadPosts();
+        var target = current.find(function (p) { return String(p.id) === id; });
+        if (!target) { btn.disabled = false; return; }
+        if (!Array.isArray(target.plusOnes)) target.plusOnes = [];
+
+        var already = target.plusOnes.some(function (po) { return namesMatch(po.name, name); });
+        if (already) {
+          target.plusOnes = target.plusOnes.filter(function (po) { return !namesMatch(po.name, name); });
+        } else {
+          target.plusOnes.push({ name: name, createdAt: Date.now() });
+        }
+
+        var result = await savePosts(current);
+        if (!result.ok) {
+          btn.disabled = false;
+          var original = btn.textContent;
+          btn.textContent = "Try again";
+          setTimeout(function () { btn.textContent = original; }, 1600);
+          return;
+        }
+
+        var today = todayISO();
+        state.posts = current.filter(function (p) { return p.date >= today; });
+        render();
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".btn-cancel-plusone"), function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-id");
+        delete state.plusOnePrompt[id];
+        render();
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".plusone-form"), function (form) {
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var id = form.getAttribute("data-id");
+        var errEl = form.closest(".row-plusone-prompt").querySelector(".plusone-err");
+        errEl.classList.add("hidden");
+
+        var name = form.querySelector(".plusone-name-input").value.trim();
+        if (!name) return;
+
+        var submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+
+        var current = await loadPosts();
+        var target = current.find(function (p) { return String(p.id) === id; });
+        if (!target) {
+          errEl.textContent = "This post was removed — refresh the page.";
+          errEl.classList.remove("hidden");
+          submitBtn.disabled = false;
+          return;
+        }
+        if (!Array.isArray(target.plusOnes)) target.plusOnes = [];
+        if (!target.plusOnes.some(function (po) { return namesMatch(po.name, name); })) {
+          target.plusOnes.push({ name: name, createdAt: Date.now() });
+        }
+
+        var result = await savePosts(current);
+        submitBtn.disabled = false;
+
+        if (!result.ok) {
+          errEl.textContent = "Couldn't save — check your connection and try again.";
+          errEl.classList.remove("hidden");
+          return;
+        }
+
+        saveMe({ name: name });
+        state.me = { name: name };
+        delete state.plusOnePrompt[id];
+
+        var today = todayISO();
+        state.posts = current.filter(function (p) { return p.date >= today; });
         render();
       });
     });
@@ -1342,7 +1524,8 @@
         var post = Object.assign({
           id: Date.now() + "-" + Math.random().toString(36).slice(2, 8),
           createdAt: Date.now(),
-          comments: []
+          comments: [],
+          plusOnes: []
         }, fields);
         current.push(post);
         result = await savePosts(current);
