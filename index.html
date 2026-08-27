@@ -2218,15 +2218,18 @@
     buildCitySelect(destSel);
     buildTimeSelects(backdrop.querySelector("#f_hour"), backdrop.querySelector("#f_minute"));
 
-    // Only for a new post — editing prefills the trip's own time below, and
-    // overwriting that with "now" would quietly change someone's departure.
+    var dateInput = backdrop.querySelector("#f_date");
+    dateInput.min = todayISO();
+
+    // Only for a new post — editing prefills the trip's own date and time
+    // below, and overwriting those with "today"/"now" would quietly move
+    // someone's departure. Most trips posted here are for the same day, so a
+    // real date beats an empty "mm/dd/yyyy": untouched, the form posts today.
     if (!editPost) {
+      dateInput.value = todayISO();
       backdrop.querySelector("#f_hour").value = nextHourDefault();
       backdrop.querySelector("#f_minute").value = "00";
     }
-
-    var dateInput = backdrop.querySelector("#f_date");
-    dateInput.min = todayISO();
 
     var role = null;
     function setRole(r) {
