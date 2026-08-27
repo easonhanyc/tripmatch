@@ -698,19 +698,34 @@ async function handleCreateComment(request, env, session, postId) {
   return json({ posts: await loadBoard(env, session) }, 201, request, env);
 }
 
-async function handleTogglePlusOne(request, env, session, postId) {
+/**
+ * Toggle the viewer's interest in a post.
+ *
+ * The interaction means two different things depending on who posted:
+ *
+ *   * On a DRIVER's post it's a seat claim, and it's capacity-limited. "+1"
+ *     was genuinely ambiguous here — it read as either "I want a seat" or
+ *     "I'm also driving that way" — and nothing stopped six people claiming
+ *     three seats.
+ *   * On a RIDER's post it stays an open-ended "me too": several people
+ *     wanting the same trip is useful signal for a driver reading the board,
+ *     and there's no capacity to run out of.
+ *
+ * Both live in the same table. A row means "this person raised their hand on
+ * this post"; only the cap and the wording differ.
+ */
+async function handleToggleInterest(request, env, session, postId) {
   const post = await env.DB.prepare(
-    `SELECT id, author_email, author_name FROM posts WHERE id = ? AND deleted_at IS NULL`
+    `SELECT id, author_email, author_name, role, seats FROM posts WHERE id = ? AND deleted_at IS NULL`
   )
     .bind(postId)
     .first();
   if (!post) return fail("NOT_FOUND", "This post was removed — refresh the page.", 404, request, env);
-  // ownsPost, not a bare email comparison: a post imported from the old board
-  // has no email, so the equality check was false for its own author and let
-  // them +1 their own trip.
   if (ownsPost(post, session)) {
-    return fail("INVALID", "You can't +1 your own post.", 400, request, env);
+    return fail("INVALID", "You can't join your own trip.", 400, request, env);
   }
+
+  const isSeatClaim = post.role === "driver";
 
   const existing = await env.DB.prepare(
     `SELECT 1 FROM plus_ones WHERE post_id = ? AND author_email = ?`
@@ -722,16 +737,48 @@ async function handleTogglePlusOne(request, env, session, postId) {
     await env.DB.prepare(`DELETE FROM plus_ones WHERE post_id = ? AND author_email = ?`)
       .bind(postId, session.email)
       .run();
-    await logEvent(env, request, session, "plusone.remove", "post", postId, null);
+    await logEvent(env, request, session, isSeatClaim ? "seat.release" : "plusone.remove", "post", postId,
+      { driver: post.author_name });
+    return json({ posts: await loadBoard(env, session) }, 200, request, env);
+  }
+
+  if (isSeatClaim) {
+    // Capacity is enforced inside the INSERT rather than by reading the count
+    // and then writing. Two people tapping the last seat at the same moment
+    // would both pass a separate check and both get in; here SQLite evaluates
+    // the count and performs the insert as one statement, so exactly one of
+    // them wins and the other is told the seat went.
+    const res = await env.DB.prepare(
+      `INSERT OR IGNORE INTO plus_ones (post_id, author_email, author_name, created_at)
+       SELECT ?, ?, ?, ?
+        WHERE (SELECT COUNT(*) FROM plus_ones WHERE post_id = ?) < ?`
+    )
+      .bind(postId, session.email, session.name, Date.now(), postId, post.seats)
+      .run();
+
+    if (!(res.meta && res.meta.changes)) {
+      await logEvent(env, request, session, "seat.claim.full", "post", postId, { driver: post.author_name });
+      return fail(
+        "SEATS_FULL",
+        `${post.author_name}'s car is full — all ${post.seats} seat${post.seats === 1 ? "" : "s"} are taken.`,
+        409,
+        request,
+        env
+      );
+    }
+
+    await logEvent(env, request, session, "seat.claim", "post", postId, {
+      driver: post.author_name,
+      seats: post.seats,
+    });
   } else {
-    // OR IGNORE makes a double-tap idempotent rather than an error.
     await env.DB.prepare(
       `INSERT OR IGNORE INTO plus_ones (post_id, author_email, author_name, created_at)
        VALUES (?, ?, ?, ?)`
     )
       .bind(postId, session.email, session.name, Date.now())
       .run();
-    await logEvent(env, request, session, "plusone.add", "post", postId, null);
+    await logEvent(env, request, session, "plusone.add", "post", postId, { rider: post.author_name });
   }
 
   return json({ posts: await loadBoard(env, session) }, 200, request, env);
@@ -858,7 +905,7 @@ export default {
       if (m && request.method === "POST") return handleCreateComment(request, env, session, m[1]);
 
       m = path.match(/^\/api\/posts\/([A-Za-z0-9_-]+)\/plusone$/);
-      if (m && request.method === "POST") return handleTogglePlusOne(request, env, session, m[1]);
+      if (m && request.method === "POST") return handleToggleInterest(request, env, session, m[1]);
 
       return fail("NOT_FOUND", "No such endpoint.", 404, request, env);
     } catch (e) {

@@ -257,6 +257,20 @@
   .plusone-btn.has-plusones { color: var(--gold-deep); border-color: var(--gold-deep); }
   .plusone-btn.joined { background: #fff8e6; color: var(--gold-deep); border-color: var(--gold-deep); }
   .plusone-btn:disabled { opacity: 0.6; cursor: default; }
+  /* A full car reads as closed rather than merely unavailable — riders scan
+     the board for somewhere to get in, so "no" should be obvious at a glance. */
+  .plusone-btn.is-full {
+    background: var(--line-soft);
+    color: var(--ink-soft);
+    border-color: var(--line);
+    text-decoration: line-through;
+  }
+
+  .badge.full {
+    background: var(--line-soft);
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+  }
 
   /* Per-row error slot: failures that are about one specific post, shown
      next to it rather than in the global banner up top. */
@@ -1404,6 +1418,12 @@
     var managingOther = canManage && !isOwner;
     var confirming = !!state.confirmingDelete[p.id];
     var joined = plusOnes.some(function (po) { return po.mine; });
+
+    // On a driver's post the hand-raisers are people taking seats, and the
+    // list is capped. On a rider's post it stays an uncapped "me too".
+    var isSeatClaim = p.role === "driver";
+    var seatsLeft = isSeatClaim ? Math.max(0, p.seats - plusOnes.length) : 0;
+    var full = isSeatClaim && seatsLeft === 0;
     var html = '<div class="row' + (isOwner ? ' is-mine' : '') + '" data-post-id="' + p.id + '">';
 
     html += '<div class="row-summary">';
@@ -1412,7 +1432,11 @@
     html += '<div class="row-top">';
     html += '<span class="name">' + escapeHtml(p.name) + '</span>';
     if (p.role === "driver") {
-      html += '<span class="badge driver">Offering · ' + p.seats + ' seat' + (p.seats == 1 ? "" : "s") + '</span>';
+      // "3 seats" told you the size of the car, not whether you could get in
+      // it. What a rider actually needs to know is how many are still free.
+      html += full
+        ? '<span class="badge full">Full · ' + p.seats + ' seat' + (p.seats == 1 ? "" : "s") + ' taken</span>'
+        : '<span class="badge driver">Offering · ' + seatsLeft + ' of ' + p.seats + ' seat' + (p.seats == 1 ? "" : "s") + ' left</span>';
     } else {
       html += '<span class="badge rider">Needs a ride</span>';
     }
@@ -1420,14 +1444,43 @@
     html += '<div class="cities">' + escapeHtml(p.originCity) + ' → ' + escapeHtml(p.destCity) + '</div>';
     if (p.notes) html += '<div class="notes">' + escapeHtml(p.notes) + '</div>';
     if (plusOnes.length) {
-      html += '<div class="plusones-line">+1: ' + plusOnes.map(function (po) { return escapeHtml(po.name); }).join(', ') + '</div>';
+      var names = plusOnes.map(function (po) { return escapeHtml(po.name); }).join(', ');
+      html += isSeatClaim
+        ? '<div class="plusones-line">Riding along: ' + names + '</div>'
+        : '<div class="plusones-line">Also going: ' + names + '</div>';
     }
     html += '</div>';
     html += '<div class="row-actions">';
-    var plusOneClass = 'plusone-btn' + (joined ? ' joined' : (plusOnes.length ? ' has-plusones' : ''));
-    var plusOneLabel = (joined ? '✓ ' : '') + '+1 · ' + plusOnes.length;
-    var plusOneTitle = plusOnes.length ? plusOnes.map(function (po) { return po.name; }).join(', ') : 'Also going this way? Count yourself in.';
-    html += '<button type="button" class="' + plusOneClass + '" data-id="' + p.id + '"' + (isOwner ? ' disabled title="This is your own post"' : ' title="' + escapeHtml(plusOneTitle) + '"') + '>' + plusOneLabel + '</button>';
+    var btnClass = 'plusone-btn';
+    var btnLabel, btnTitle, btnDisabled = false;
+
+    if (isSeatClaim) {
+      if (joined) {
+        btnClass += ' joined';
+        btnLabel = '✓ Seat taken';
+        btnTitle = 'You have a seat on this trip — tap to give it back.';
+      } else if (full) {
+        btnClass += ' is-full';
+        btnLabel = 'Full';
+        btnDisabled = true;
+        btnTitle = 'Every seat on this trip is taken.';
+      } else {
+        btnClass += plusOnes.length ? ' has-plusones' : '';
+        btnLabel = 'Take a seat';
+        btnTitle = seatsLeft + ' of ' + p.seats + ' seat' + (p.seats == 1 ? '' : 's') + ' still free.';
+      }
+    } else {
+      btnClass += joined ? ' joined' : (plusOnes.length ? ' has-plusones' : '');
+      btnLabel = (joined ? '✓ ' : '') + '+1 · ' + plusOnes.length;
+      btnTitle = plusOnes.length
+        ? plusOnes.map(function (po) { return po.name; }).join(', ')
+        : 'Going the same way? Count yourself in.';
+    }
+
+    if (isOwner) { btnDisabled = true; btnTitle = 'This is your own post'; }
+
+    html += '<button type="button" class="' + btnClass + '" data-id="' + p.id + '"' +
+      (btnDisabled ? ' disabled' : '') + ' title="' + escapeHtml(btnTitle) + '">' + btnLabel + '</button>';
     html += '<button class="comment-btn' + (comments.length ? ' has-comments' : '') + '" data-id="' + p.id + '">💬 ' + comments.length + '</button>';
     if (canManage) {
       var adminMark = managingOther ? ' title="Admin action on someone else\'s post — this is recorded in the activity log"' : '';
@@ -1644,8 +1697,13 @@
           btn.disabled = false;
           // The banner already covers transport and auth failures; only the
           // post-specific ones need to be said here.
-          if (res.code === "NOT_FOUND" || res.code === "FORBIDDEN" || res.code === "INVALID") {
+          if (res.code === "NOT_FOUND" || res.code === "FORBIDDEN" ||
+              res.code === "INVALID" || res.code === "SEATS_FULL") {
+            // SEATS_FULL means someone took the last seat between this page
+            // rendering and the tap landing. Say so, and refresh so the
+            // button they're looking at stops offering a seat that's gone.
             rowError(id, res.message);
+            if (res.code === "SEATS_FULL") refresh();
           } else {
             btn.textContent = "Try again";
             setTimeout(function () { if (btn.isConnected) btn.textContent = original; }, 1600);

@@ -173,9 +173,19 @@ for (let i = 0; i < 12; i++) {
   voters.push((await call("POST", "/api/auth/session", { body: {
     credential: await makeIdToken({ email: `s${i}@berkeley.edu`, name: `Student ${i}` }) } })).data.token);
 }
-await Promise.all(voters.map(t => call("POST", "/api/posts/" + postId + "/plusone", { token: t })));
+// This checks that concurrent writes don't overwrite one another, which is
+// what the old whole-board rewrite got wrong. It has to run against a RIDER
+// post: on a driver's post the same burst is correctly capped at the seat
+// count, and the capacity race is covered separately below.
+const meToo = (await call("POST", "/api/posts", { token: alice, body: {
+  role: "rider", date: tomorrow, notes: "concurrency me-too",
+  originCity: "Berkeley", destCity: "San Francisco",
+  originRegion: "East Bay / Campus", destRegion: "San Francisco" } })).data.posts
+  .find(p => p.notes === "concurrency me-too");
+
+await Promise.all(voters.map(t => call("POST", "/api/posts/" + meToo.id + "/plusone", { token: t })));
 r = await call("GET", "/api/board", { token: alice });
-const plusCount = r.data.posts.find(p => p.id === postId)?.plusOnes.length;
+const plusCount = r.data.posts.find(p => p.id === meToo.id)?.plusOnes.length;
 ok("12 simultaneous +1s all persisted", plusCount === 12, { got: plusCount });
 
 const before = (await call("GET", "/api/board", { token: alice })).data.posts.length;
@@ -451,6 +461,83 @@ r = await call("GET", "/api/logs?action=post.delete", { token: admin });
 const ownDel = r.data.rows.find(x => x.entity_id === ownPost.id);
 ok("an ordinary self-delete is not tagged asAdmin",
    ownDel && JSON.parse(ownDel.detail).asAdmin === undefined, ownDel?.detail);
+
+
+// ------------------------------------------------------- SEAT CLAIMS
+group("Seat claims on driver posts");
+
+const carPost = (await call("POST", "/api/posts", { token: alice, body: {
+  role: "driver", seats: 2, date: tomorrow, time: "08:00", notes: "two seater",
+  originCity: "Berkeley", destCity: "San Francisco",
+  originRegion: "East Bay / Campus", destRegion: "San Francisco" } })).data.posts
+  .find(p => p.notes === "two seater");
+
+r = await call("POST", "/api/posts/" + carPost.id + "/plusone", { token: alice });
+ok("driver cannot take a seat in their own car", r.status === 400, r.data);
+
+r = await call("POST", "/api/posts/" + carPost.id + "/plusone", { token: bob });
+ok("a rider can take a seat", r.status === 200, r.data);
+ok("seat is recorded", r.data.posts.find(p => p.id === carPost.id).plusOnes.length === 1);
+
+r = await call("POST", "/api/posts/" + carPost.id + "/plusone", { token: voters[0] });
+ok("a second rider fills the car", r.status === 200, r.data);
+ok("two seats taken", r.data.posts.find(p => p.id === carPost.id).plusOnes.length === 2);
+
+r = await call("POST", "/api/posts/" + carPost.id + "/plusone", { token: voters[1] });
+ok("a third rider is refused — car is full", r.status === 409 && r.data.error.code === "SEATS_FULL", r.data);
+ok("the refusal names the driver and the count",
+   /Test Student's car is full/.test(r.data.error.message) && /2 seats/.test(r.data.error.message),
+   r.data.error.message);
+
+r = await call("GET", "/api/board", { token: alice });
+ok("a refused claim adds nobody", r.data.posts.find(p => p.id === carPost.id).plusOnes.length === 2);
+
+// Releasing frees the seat for someone else.
+r = await call("POST", "/api/posts/" + carPost.id + "/plusone", { token: bob });
+ok("a rider can give their seat back", r.status === 200 && r.data.posts.find(p => p.id === carPost.id).plusOnes.length === 1, r.data);
+r = await call("POST", "/api/posts/" + carPost.id + "/plusone", { token: voters[1] });
+ok("the freed seat can then be taken", r.status === 200, r.data);
+
+// The race the capacity check exists for: many people, one seat.
+const oneSeat = (await call("POST", "/api/posts", { token: alice, body: {
+  role: "driver", seats: 1, date: tomorrow, notes: "last seat race",
+  originCity: "Berkeley", destCity: "Oakland",
+  originRegion: "East Bay / Campus", destRegion: "East Bay / Campus" } })).data.posts
+  .find(p => p.notes === "last seat race");
+
+const scramble = await Promise.all(
+  voters.slice(0, 10).map(t => call("POST", "/api/posts/" + oneSeat.id + "/plusone", { token: t }))
+);
+const won = scramble.filter(x => x.status === 200).length;
+const lost = scramble.filter(x => x.status === 409).length;
+ok("exactly one of 10 simultaneous claims wins the single seat", won === 1, { won, lost });
+ok("the other nine are cleanly refused", lost === 9, { won, lost });
+
+r = await call("GET", "/api/board", { token: alice });
+ok("the car holds exactly one rider afterwards",
+   r.data.posts.find(p => p.id === oneSeat.id).plusOnes.length === 1);
+
+// Rider posts stay uncapped — several people wanting the same trip is signal.
+group("+1 on rider posts stays uncapped");
+
+const needRide = (await call("POST", "/api/posts", { token: alice, body: {
+  role: "rider", date: tomorrow, notes: "uncapped me-too",
+  originCity: "Berkeley", destCity: "San Jose",
+  originRegion: "East Bay / Campus", destRegion: "South Bay" } })).data.posts
+  .find(p => p.notes === "uncapped me-too");
+
+await Promise.all(voters.slice(0, 8).map(t => call("POST", "/api/posts/" + needRide.id + "/plusone", { token: t })));
+r = await call("GET", "/api/board", { token: alice });
+ok("eight people can +1 one rider post", r.data.posts.find(p => p.id === needRide.id).plusOnes.length === 8,
+   { got: r.data.posts.find(p => p.id === needRide.id).plusOnes.length });
+
+// The log should distinguish a seat claim from a me-too.
+r = await call("GET", "/api/logs?action=seat.claim", { token: admin });
+ok("seat claims are logged as seat.claim", r.data.rows.length > 0);
+r = await call("GET", "/api/logs?action=seat.claim.full", { token: admin });
+ok("refused claims are logged too", r.data.rows.length >= 9, { got: r.data.rows.length });
+r = await call("GET", "/api/logs?action=plusone.add", { token: admin });
+ok("rider me-toos stay plusone.add", r.data.rows.length > 0);
 
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
