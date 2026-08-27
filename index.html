@@ -856,6 +856,98 @@
     padding: 0 4px;
   }
 
+
+  /* ---------------------------------------------------------- feedback -- */
+
+  .fb-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 22, 34, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 60;
+  }
+  .fb-sheet {
+    background: var(--panel);
+    border-radius: 14px;
+    max-width: 480px;
+    width: 100%;
+    max-height: 88vh;
+    overflow-y: auto;
+    box-shadow: 0 12px 40px rgba(0, 27, 51, 0.28);
+  }
+  .fb-head {
+    background: var(--blue);
+    color: #fff;
+    padding: 20px 24px 17px;
+    border-bottom: 4px solid var(--gold);
+  }
+  .fb-head h3 { margin: 0; font-family: 'Fraunces', serif; font-size: 21px; font-weight: 600; }
+  .fb-head p { margin: 5px 0 0; font-size: 13px; opacity: 0.88; line-height: 1.5; }
+
+  .fb-body { padding: 20px 24px 22px; }
+  .fb-body label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-bottom: 7px;
+  }
+
+  .fb-kinds { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 18px; }
+  .fb-kind {
+    flex: 1 1 auto;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink-soft);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .fb-kind:hover { border-color: var(--founders); color: var(--founders); }
+  .fb-kind.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+  .fb-body textarea {
+    width: 100%;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    padding: 11px 12px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--paper);
+    color: var(--ink);
+    resize: vertical;
+  }
+  .fb-body textarea:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+  .fb-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-faint, #8b959e);
+    text-align: right;
+    margin-top: 4px;
+  }
+
+  /* Named explicitly, so nobody wonders whether this is anonymous. */
+  .fb-who {
+    margin-top: 14px;
+    padding: 9px 11px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+  }
+  .fb-who strong { font-family: 'IBM Plex Sans', sans-serif; color: var(--ink); }
+
   .other-city { margin-top: 8px; }
   .hidden { display: none !important; }
 </style>
@@ -905,7 +997,7 @@
       </div>
       <div class="header-top-row">
         <button type="button" class="contact-link linkish" id="howLink">How it works</button>
-        <a class="contact-link" href="mailto:eason_han@berkeley.edu">Bug or issue? Email eason_han@berkeley.edu or DM</a>
+        <button type="button" class="contact-link linkish" id="feedbackLink">Issues or suggestions? Fill this form here!</button>
       </div>
       <h1 class="wordmark">TripMatch</h1>
       <p class="tagline">Post a trip, see who else is going your way. No more scrolling the group chat.</p>
@@ -2022,6 +2114,16 @@
     minuteSel.innerHTML = m;
   }
 
+  // The next whole hour, or this one if we're exactly on it: 11:24 -> 12,
+  // 16:48 -> 17, 16:00 -> 16. Most trips are posted shortly before they
+  // happen, so an empty time wheel was a step almost everyone had to take.
+  function nextHourDefault() {
+    var now = new Date();
+    var h = now.getHours();
+    if (now.getMinutes() > 0) h = (h + 1) % 24;   // wraps 23:xx round to 00
+    return String(h).padStart(2, "0");
+  }
+
   function openSheet(editPost) {
     var isEdit = !!editPost;
     var backdrop = document.createElement("div");
@@ -2100,6 +2202,13 @@
     buildCitySelect(originSel);
     buildCitySelect(destSel);
     buildTimeSelects(backdrop.querySelector("#f_hour"), backdrop.querySelector("#f_minute"));
+
+    // Only for a new post — editing prefills the trip's own time below, and
+    // overwriting that with "now" would quietly change someone's departure.
+    if (!editPost) {
+      backdrop.querySelector("#f_hour").value = nextHourDefault();
+      backdrop.querySelector("#f_minute").value = "00";
+    }
 
     var dateInput = backdrop.querySelector("#f_date");
     dateInput.min = todayISO();
@@ -2314,7 +2423,122 @@
     backdrop.querySelector(".how-sheet").scrollTop = 0;
   }
 
+
+  // ---------- feedback ----------
+  //
+  // Kept inside the app rather than pointing at an external form: the
+  // submitter is already signed in, so we know who they are and what to reply
+  // to without asking, and a report arrives next to the activity log rather
+  // than in a separate service someone has to remember to check.
+
+  function openFeedback() {
+    if (document.querySelector(".fb-backdrop")) return;
+
+    var backdrop = document.createElement("div");
+    backdrop.className = "fb-backdrop";
+    backdrop.setAttribute("role", "dialog");
+    backdrop.setAttribute("aria-modal", "true");
+    backdrop.setAttribute("aria-label", "Send feedback");
+    backdrop.innerHTML =
+      '<div class="fb-sheet">' +
+      '<div class="fb-head">' +
+      '<h3>Issues or suggestions</h3>' +
+      '<p>Something broken, confusing, or missing? Tell us — it goes straight to Eason.</p>' +
+      '</div>' +
+      '<form class="fb-body" id="fbForm">' +
+
+      '<label>What kind of thing is it?</label>' +
+      '<div class="fb-kinds">' +
+      '<button type="button" class="fb-kind active" data-kind="bug">Something\'s broken</button>' +
+      '<button type="button" class="fb-kind" data-kind="idea">An idea</button>' +
+      '<button type="button" class="fb-kind" data-kind="other">Something else</button>' +
+      '</div>' +
+
+      '<label for="fb_body">Tell us more</label>' +
+      '<textarea id="fb_body" maxlength="2000" rows="6" required ' +
+      'placeholder="What happened, and what did you expect instead? If it\'s a bug, what were you doing just before?"></textarea>' +
+      '<div class="fb-count"><span id="fbCount">0</span> / 2000</div>' +
+
+      '<div class="fb-who">Sending as <strong>' + escapeHtml(me() ? me().name : "") + '</strong> · ' +
+      escapeHtml(me() ? me().email : "") + '</div>' +
+
+      '<div id="fbErr" class="err hidden"></div>' +
+
+      '<div class="submit-row">' +
+      '<button type="button" class="btn-secondary" id="fbCancel">Cancel</button>' +
+      '<button type="submit" class="btn-primary">Send</button>' +
+      '</div>' +
+      '</form>' +
+      '</div>';
+
+    document.body.appendChild(backdrop);
+
+    var kind = "bug";
+    Array.prototype.forEach.call(backdrop.querySelectorAll(".fb-kind"), function (b) {
+      b.addEventListener("click", function () {
+        kind = b.getAttribute("data-kind");
+        Array.prototype.forEach.call(backdrop.querySelectorAll(".fb-kind"), function (o) {
+          o.classList.toggle("active", o === b);
+        });
+      });
+    });
+
+    var textEl = backdrop.querySelector("#fb_body");
+    textEl.addEventListener("input", function () {
+      backdrop.querySelector("#fbCount").textContent = textEl.value.length;
+    });
+
+    function close() {
+      if (backdrop.parentNode) document.body.removeChild(backdrop);
+      document.removeEventListener("keydown", onKey);
+    }
+    function onKey(e) { if (e.key === "Escape") close(); }
+
+    backdrop.querySelector("#fbCancel").addEventListener("click", close);
+    backdrop.addEventListener("click", function (e) { if (e.target === backdrop) close(); });
+    document.addEventListener("keydown", onKey);
+
+    backdrop.querySelector("#fbForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var errEl = backdrop.querySelector("#fbErr");
+      errEl.classList.add("hidden");
+
+      var text = textEl.value.trim();
+      if (!text) return;
+
+      var submitBtn = backdrop.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Sending…";
+
+      var res = await api("/api/feedback", { method: "POST", body: { kind: kind, body: text } });
+
+      if (!res.ok) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Send";
+        errEl.textContent = (res.code === "UNREACHABLE" || res.code === "OFFLINE" || res.code === "SERVER_ERROR")
+          ? "Couldn't send that — see the notice above the board."
+          : res.message;
+        errEl.classList.remove("hidden");
+        return;
+      }
+
+      // Confirm in place rather than closing silently — a form that vanishes
+      // leaves people wondering whether it actually sent.
+      backdrop.querySelector(".fb-sheet").innerHTML =
+        '<div class="fb-head"><h3>Thanks — got it</h3>' +
+        '<p>Eason can see this alongside your name, so there\'s no need to follow up by email.</p></div>' +
+        '<div class="fb-body"><div class="submit-row">' +
+        '<button type="button" class="btn-primary" id="fbDone">Back to the board</button>' +
+        '</div></div>';
+      backdrop.querySelector("#fbDone").addEventListener("click", close);
+      backdrop.querySelector("#fbDone").focus();
+    });
+
+    textEl.focus();
+  }
+
   document.getElementById("openFab").addEventListener("click", function () { openSheet(); });
+  document.getElementById("feedbackLink").addEventListener("click", openFeedback);
   document.getElementById("howLink").addEventListener("click", openHowTo);
 
   init();

@@ -102,3 +102,22 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log (ts DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log (actor_email, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log (action, ts DESC);
+
+-- ------------------------------------------------------------- feedback
+
+-- Bug reports and suggestions, submitted from inside the app. Kept in our
+-- own database rather than a third-party form so the submitter's verified
+-- identity comes along for free — nobody has to be asked who they are, and
+-- a report can be followed up without a separate lookup.
+CREATE TABLE IF NOT EXISTS feedback (
+  id           TEXT PRIMARY KEY,
+  author_email TEXT NOT NULL,
+  author_name  TEXT NOT NULL,
+  kind         TEXT NOT NULL CHECK (kind IN ('bug','idea','other')),
+  body         TEXT NOT NULL,
+  user_agent   TEXT,
+  created_at   INTEGER NOT NULL,
+  resolved_at  INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at DESC);

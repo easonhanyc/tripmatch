@@ -37,6 +37,9 @@ const RATE_LIMIT_MAX_WRITES = 20;
 
 const MAX_NOTES = 300;
 const MAX_COMMENT = 300;
+// Feedback gets far more room than a comment — a useful bug report needs to
+// describe what happened, and truncating it mid-sentence loses the point.
+const MAX_FEEDBACK = 2000;
 const MAX_NAME = 60;
 const MAX_CITY = 60;
 // A single account speaking for more than four travellers is almost certainly
@@ -502,6 +505,51 @@ function ownsPost(post, session) {
   );
 }
 
+async function handleCreateFeedback(request, env, session) {
+  const body = await request.json().catch(() => ({}));
+
+  const kind = ["bug", "idea", "other"].includes(body.kind) ? body.kind : "other";
+  const text = cleanStr(body.body, MAX_FEEDBACK);
+  if (!text) return fail("INVALID", "Tell us what's up first.", 400, request, env);
+
+  const id = newId();
+  await env.DB.prepare(
+    `INSERT INTO feedback (id, author_email, author_name, kind, body, user_agent, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(
+      id, session.email, session.name, kind, text,
+      (request.headers.get("User-Agent") || "").slice(0, 300) || null,
+      Date.now()
+    )
+    .run();
+
+  // Logged as well as stored, so the activity log stays a complete picture of
+  // what people did — including telling us something was broken.
+  await logEvent(env, request, session, "feedback.create", "feedback", id, {
+    kind,
+    preview: text.slice(0, 120),
+  });
+
+  return json({ ok: true }, 201, request, env);
+}
+
+async function handleListFeedback(request, env, session, url) {
+  if (!isAdmin(env, session)) {
+    await logEvent(env, request, session, "feedback.list.denied", null, null, null);
+    return fail("FORBIDDEN", "Feedback is limited to TripMatch admins.", 403, request, env);
+  }
+
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10) || 200, 1000);
+  const res = await env.DB.prepare(
+    `SELECT * FROM feedback ORDER BY created_at DESC LIMIT ?`
+  )
+    .bind(limit)
+    .all();
+
+  return json({ rows: res.results || [] }, 200, request, env);
+}
+
 function isAdmin(env, session) {
   return (env.ADMIN_EMAILS || "")
     .split(",")
@@ -958,6 +1006,10 @@ export default {
         return json({ user: session, isAdmin: isAdmin(env, session) }, 200, request, env);
       }
       if (path === "/api/posts" && request.method === "POST") return handleCreatePost(request, env, session);
+      if (path === "/api/feedback") {
+        if (request.method === "POST") return handleCreateFeedback(request, env, session);
+        if (request.method === "GET") return handleListFeedback(request, env, session, url);
+      }
 
       let m = path.match(/^\/api\/posts\/([A-Za-z0-9_-]+)$/);
       if (m) {

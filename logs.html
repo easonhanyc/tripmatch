@@ -96,6 +96,21 @@
   .tag.other  { background: var(--line-soft); color: var(--ink-soft); }
 
   /* Marks a moderation action — an admin acting on a post they didn't write. */
+  .fb-kind-tag {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: #e9f1f8;
+    color: #1c4a72;
+    border: 1px solid #b6cee2;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-right: 5px;
+  }
+
   .admin-flag {
     display: inline-block;
     font-family: 'IBM Plex Mono', monospace;
@@ -199,6 +214,7 @@
     if (action.indexOf("update") !== -1) return "update";
     if (action.indexOf("delete") !== -1 || action.indexOf("remove") !== -1 || action.indexOf("expire") !== -1) return "delete";
     if (action.indexOf("login") !== -1) return "login";
+    if (action.indexOf("feedback") !== -1) return "update";
     return "other";
   }
 
@@ -240,6 +256,9 @@
     }
     if (action === "post.expire") {
       return escapeHtml(d.count + " post" + (d.count === 1 ? "" : "s") + " aged out before " + d.before);
+    }
+    if (action === "feedback.create") {
+      return '<span class="fb-kind-tag">' + escapeHtml(d.kind) + '</span> ' + escapeHtml(d.preview || "");
     }
     if (action === "migration.import") {
       return escapeHtml(d.posts + " posts, " + d.comments + " comments, " + d.plusOnes + " +1s from " + d.source);

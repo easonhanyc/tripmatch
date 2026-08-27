@@ -646,6 +646,57 @@ ok("a driver post ignores partySize", dp.partySize === 1, dp);
 r = await call("GET", "/api/logs?action=seat.claim", { token: admin });
 ok("seat claims log the party size", r.data.rows.some(x => JSON.parse(x.detail || "{}").party >= 2));
 
+
+// ------------------------------------------------------------ FEEDBACK
+group("In-app feedback");
+
+// Fresh accounts: bob and alice have spent their write budget earlier in this
+// file, and a 429 here would look like a feedback bug rather than the rate
+// limiter doing its job.
+const reporter = (await call("POST", "/api/auth/session", { body: {
+  credential: await makeIdToken({ email: "reporter@berkeley.edu", name: "Reed Porter" }) } })).data.token;
+const reporter2 = (await call("POST", "/api/auth/session", { body: {
+  credential: await makeIdToken({ email: "reporter2@berkeley.edu", name: "Sam Second" }) } })).data.token;
+
+r = await call("POST", "/api/feedback", { token: reporter, body: {
+  kind: "bug", body: "The +1 button did nothing on my phone." } });
+ok("a signed-in user can send feedback", r.status === 201, r.data);
+
+r = await call("POST", "/api/feedback", { body: { kind: "bug", body: "anon" } });
+ok("feedback requires a session", r.status === 401, r.data);
+
+r = await call("POST", "/api/feedback", { token: reporter, body: { kind: "bug", body: "   " } });
+ok("empty feedback is refused", r.status === 400, r.data);
+
+r = await call("POST", "/api/feedback", { token: reporter2, body: { kind: "nonsense", body: "hi" } });
+ok("an unknown kind falls back rather than erroring", r.status === 201, r.data);
+
+r = await call("GET", "/api/feedback", { token: reporter });
+ok("a non-admin cannot read feedback", r.status === 403, r.data);
+
+r = await call("GET", "/api/feedback", { token: admin });
+ok("an admin can read feedback", r.status === 200 && r.data.rows.length >= 2, r.data);
+
+const fb = r.data.rows.find(x => x.body.includes("+1 button"));
+ok("feedback carries the submitter's verified identity",
+   fb && fb.author_email === "reporter@berkeley.edu" && fb.author_name === "Reed Porter", fb);
+ok("the kind is stored", fb && fb.kind === "bug", fb);
+ok("an unknown kind was coerced to 'other'",
+   r.data.rows.some(x => x.body === "hi" && x.kind === "other"), r.data.rows);
+
+r = await call("GET", "/api/logs?action=feedback.create", { token: admin });
+ok("feedback appears in the activity log", r.data.rows.length >= 2, { got: r.data.rows.length });
+ok("the log entry carries a preview",
+   r.data.rows.some(x => (JSON.parse(x.detail || "{}").preview || "").includes("+1 button")));
+
+// A very long report should be stored, not rejected.
+r = await call("POST", "/api/feedback", { token: reporter2, body: {
+  kind: "idea", body: "x".repeat(3000) } });
+ok("an over-long report is truncated, not rejected", r.status === 201, r.data);
+r = await call("GET", "/api/feedback", { token: admin });
+const longOne = r.data.rows.find(x => x.body.startsWith("xxx"));
+ok("truncated to the cap", longOne && longOne.body.length === 2000, { len: longOne && longOne.body.length });
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail > 0 ? 1 : 0);
