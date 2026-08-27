@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TripMatch — Privacy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #003057; --gold: #fdb515; --paper: #f7f6f2; --panel: #fff;
+    --ink: #1c2530; --ink-soft: #57616d; --line: #dcdad3; --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--paper); color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 15px; line-height: 1.65; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 660px; margin: 0 auto; padding: 0 20px; }
+  header.top {
+    background: var(--blue); color: #fff;
+    padding: 30px 0 24px; border-bottom: 5px solid var(--gold);
+  }
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.75; margin: 0 0 6px;
+  }
+  h1 { font-family: 'Fraunces', Georgia, serif; font-weight: 600; font-size: 32px; margin: 0; letter-spacing: -0.02em; }
+  .updated { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; opacity: 0.8; margin: 10px 0 0; }
+  main { padding: 32px 0 70px; }
+  h2 {
+    font-family: 'Fraunces', Georgia, serif; font-weight: 600; font-size: 20px;
+    margin: 32px 0 10px; letter-spacing: -0.01em;
+  }
+  h2:first-child { margin-top: 0; }
+  p { margin: 0 0 13px; }
+  ul { margin: 0 0 13px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  a { color: var(--blue); text-underline-offset: 2px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 16px 18px; margin: 0 0 13px;
+  }
+  .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+  code {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.88em;
+    background: #efece5; border: 1px solid var(--line); padding: 1px 5px; border-radius: 4px;
+  }
+  footer {
+    margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line);
+    font-size: 13px; color: var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <p class="eyebrow">TripMatch</p>
+    <h1>Privacy</h1>
+    <p class="updated">Last updated: August 26, 2026</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <p>
+    TripMatch is a shared rides board for the UC Berkeley Haas community, run by a single
+    student — not a company. This page describes exactly what it collects, why, and who
+    can see it. It is short because the app does very little.
+  </p>
+
+  <h2>Who can use it</h2>
+  <p>
+    TripMatch is limited to <code>@berkeley.edu</code> accounts. Sign-in is handled by
+    Google; accounts outside that domain are rejected and no data is stored for them
+    beyond a record that a sign-in was refused.
+  </p>
+
+  <h2>What we receive from Google</h2>
+  <div class="card">
+    <p>When you sign in, Google gives TripMatch three things:</p>
+    <ul>
+      <li>Your <strong>name</strong>, as it appears on your Google account</li>
+      <li>Your <strong>@berkeley.edu email address</strong></li>
+      <li>Your <strong>profile picture URL</strong></li>
+    </ul>
+    <p>
+      That is all. TripMatch never receives your password, and has no access to your
+      email, Drive, calendar, contacts, or any other Google service.
+    </p>
+  </div>
+
+  <h2>What you give us directly</h2>
+  <ul>
+    <li>Trips you post — origin, destination, date, optional time, seat count, and notes</li>
+    <li>Comments you write on trips</li>
+    <li>Trips you mark yourself interested in (&ldquo;+1&rdquo;)</li>
+  </ul>
+
+  <h2>Who can see it</h2>
+  <p>
+    Your <strong>name</strong> appears next to your posts, comments, and +1s, so classmates
+    know who to contact about a ride. That is the point of the board.
+  </p>
+  <p>
+    Your <strong>email address is not shown to other users</strong> and is not included in
+    the data sent to their browsers. It is used only to identify you as the owner of your
+    own posts, so you can edit or delete them from any device.
+  </p>
+
+  <h2>Activity log</h2>
+  <p>
+    To keep the board accountable and to diagnose problems, TripMatch records each action —
+    posting, editing, deleting, commenting, +1ing, and signing in — along with the account
+    that performed it, a timestamp, and technical request details (IP address, country, and
+    browser user-agent string).
+  </p>
+  <p>
+    This log is readable only by the app's administrator. It is not shared, sold, or used
+    for advertising or analytics.
+  </p>
+
+  <h2>What we don't do</h2>
+  <ul>
+    <li>No advertising, and no ad networks</li>
+    <li>No third-party analytics or tracking pixels</li>
+    <li>No selling or sharing of your data with anyone</li>
+    <li>No tracking you across other websites</li>
+    <li>No cookies for tracking &mdash; your sign-in is kept in your own browser's local storage</li>
+  </ul>
+
+  <h2>Where it's stored</h2>
+  <p>
+    Data is held in a Cloudflare D1 database accessed only by TripMatch's own server code.
+    Sign-in is provided by Google Identity Services, and the site itself is hosted on
+    GitHub Pages. Those three providers process data on TripMatch's behalf; no one else
+    receives it.
+  </p>
+
+  <h2>How long it's kept</h2>
+  <p>
+    Trip posts disappear from the board once the trip date has passed. Posts, comments, and
+    activity-log entries are retained in the database after that so the log stays complete
+    and a deletion can be undone if it was a mistake.
+  </p>
+
+  <h2>Deleting your data</h2>
+  <p>
+    You can delete any of your own posts from the board at any time. To have your account
+    and everything associated with it removed entirely, email the address below and it will
+    be deleted.
+  </p>
+
+  <h2>Changes</h2>
+  <p>
+    If what TripMatch collects changes, this page will be updated and the date at the top
+    will change with it.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Questions, corrections, or deletion requests:
+    <a href="mailto:eason_han@berkeley.edu">eason_han@berkeley.edu</a>
+  </p>
+
+  <footer>
+    <a href="index.html">&larr; Back to TripMatch</a>
+  </footer>
+
+</main>
+</body>
+</html>
