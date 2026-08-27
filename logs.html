@@ -95,6 +95,22 @@
   .tag.denied { background: #fff3cd; color: #6b4a06; }
   .tag.other  { background: var(--line-soft); color: var(--ink-soft); }
 
+  /* Marks a moderation action — an admin acting on a post they didn't write. */
+  .admin-flag {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: #fff3cd;
+    color: #6b4a06;
+    border: 1px solid #e8cd8a;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-right: 5px;
+  }
+
   .empty { padding: 40px 20px; text-align: center; color: var(--ink-soft); font-size: 13.5px; }
   .hidden { display: none !important; }
 </style>
@@ -201,15 +217,23 @@
         " · " + d.route + " · " + d.date + (d.time ? " " + d.time : "")
       );
     }
+    // An action taken by an admin on somebody else's post is the single most
+    // important thing this log records — it's the one case where a person's
+    // trip was changed by someone who didn't write it. Lead with it.
+    var adminFlag = d.asAdmin ? '<span class="admin-flag">as admin</span> ' : "";
+
     if (action === "post.update") {
       var keys = Object.keys(d.changed || {});
-      if (!keys.length) return "no field changed";
-      return escapeHtml(keys.map(function (k) {
-        return k + ": " + (d.changed[k].from || "—") + " → " + (d.changed[k].to || "—");
-      }).join(" · "));
+      var body = keys.length
+        ? escapeHtml(keys.map(function (k) {
+            return k + ": " + (d.changed[k].from || "—") + " → " + (d.changed[k].to || "—");
+          }).join(" · "))
+        : "no field changed";
+      if (d.asAdmin && d.author) body += escapeHtml("  (post by " + d.author + ")");
+      return adminFlag + body;
     }
     if (action === "post.delete") {
-      return escapeHtml(d.route + " · " + d.date + " · by " + d.author);
+      return adminFlag + escapeHtml(d.route + " · " + d.date + " · by " + d.author);
     }
     if (action === "comment.create") {
       return escapeHtml('"' + d.text + '" on post ' + d.postId);

@@ -373,6 +373,85 @@ const csvLine = String(r.data).split("\n").find(l => l.includes("HYPERLINK"));
 ok("CSV neutralises a formula-shaped display name", !!csvLine && csvLine.includes("\"'=HYPERLINK"), csvLine);
 ok("CSV leaves JSON detail columns untouched", !!csvLine && csvLine.includes('{""text""'), csvLine);
 
+
+// -------------------------------------------------- ADMIN MODERATION
+group("Admin moderation");
+
+// A post owned by an ordinary user, for the admin to act on.
+const modPost = (await call("POST", "/api/posts", { token: bob, body: {
+  role: "driver", seats: 2, date: tomorrow, time: "07:00", notes: "bob's trip to moderate",
+  originCity: "Berkeley", destCity: "San Jose",
+  originRegion: "East Bay / Campus", destRegion: "South Bay" } })).data.posts
+  .find(p => p.notes === "bob's trip to moderate");
+
+let board = (await call("GET", "/api/board", { token: admin })).data.posts;
+let seenByAdmin = board.find(p => p.id === modPost.id);
+ok("admin may manage a post they don't own", seenByAdmin.canManage === true, seenByAdmin);
+ok("...but it is not reported as theirs", seenByAdmin.mine === false, seenByAdmin);
+
+board = (await call("GET", "/api/board", { token: alice })).data.posts;
+const seenByAlice = board.find(p => p.id === modPost.id);
+ok("a non-admin may not manage someone else's post", seenByAlice.canManage === false, seenByAlice);
+
+board = (await call("GET", "/api/board", { token: bob })).data.posts;
+const seenByBob = board.find(p => p.id === modPost.id);
+ok("the author may manage their own post", seenByBob.canManage === true && seenByBob.mine === true, seenByBob);
+
+// Admin edit must not quietly reassign authorship.
+r = await call("PATCH", "/api/posts/" + modPost.id, { token: admin, body: {
+  role: "driver", seats: 1, date: tomorrow, time: "07:00", notes: "trimmed by admin",
+  originCity: "Berkeley", destCity: "San Jose",
+  originRegion: "East Bay / Campus", destRegion: "South Bay" } });
+ok("admin can edit another user's post", r.status === 200, r.data);
+
+let modRow = db.prepare("SELECT author_email, author_name FROM posts WHERE id = ?").get(modPost.id);
+ok("admin edit leaves authorship with the original poster",
+   modRow.author_email === "bob@berkeley.edu" && modRow.author_name === "Bob Rider", modRow);
+
+r = await call("GET", "/api/logs?action=post.update", { token: admin });
+const adminEdit = r.data.rows.find(x => x.entity_id === modPost.id);
+ok("admin edit is logged as an admin action", adminEdit && JSON.parse(adminEdit.detail).asAdmin === true, adminEdit?.detail);
+
+// An admin still isn't the owner, so +1 must remain available to them.
+r = await call("POST", "/api/posts/" + modPost.id + "/plusone", { token: admin });
+ok("admin can still +1 a post they moderate", r.status === 200, r.data);
+
+// A legacy post must not be silently claimed by an admin either.
+db.prepare(`INSERT INTO posts (id, author_email, author_name, role, seats, trip_date, trip_time, notes,
+  origin_city, dest_city, origin_region, dest_region, created_at, updated_at)
+  VALUES ('legacy-3', NULL, 'Someone Else', 'rider', 0, ?, '', '', 'Berkeley', 'SF',
+  'East Bay / Campus', 'San Francisco', ?, ?)`).run(tomorrow, Date.now(), Date.now());
+
+r = await call("PATCH", "/api/posts/legacy-3", { token: admin, body: {
+  role: "rider", date: tomorrow, notes: "admin touched", originCity: "Berkeley", destCity: "SF",
+  originRegion: "East Bay / Campus", destRegion: "San Francisco" } });
+ok("admin can edit a legacy post", r.status === 200, r.data);
+modRow = db.prepare("SELECT author_email FROM posts WHERE id='legacy-3'").get();
+ok("admin editing a legacy post does not claim it", modRow.author_email === null, modRow);
+
+// Deletion.
+r = await call("DELETE", "/api/posts/" + modPost.id, { token: alice });
+ok("a non-admin still cannot delete someone else's post", r.status === 403, r.data);
+
+r = await call("DELETE", "/api/posts/" + modPost.id, { token: admin });
+ok("admin can delete another user's post", r.status === 200, r.data);
+
+r = await call("GET", "/api/logs?action=post.delete", { token: admin });
+const adminDel = r.data.rows.find(x => x.entity_id === modPost.id);
+ok("admin delete is logged as an admin action", adminDel && JSON.parse(adminDel.detail).asAdmin === true, adminDel?.detail);
+ok("admin delete records whose post it was",
+   adminDel && JSON.parse(adminDel.detail).author === "Bob Rider", adminDel?.detail);
+
+// An ordinary user's own delete must NOT be tagged as an admin action.
+const ownPost = (await call("POST", "/api/posts", { token: bob, body: {
+  role: "rider", date: tomorrow, notes: "bob deletes his own",
+  originCity: "Berkeley", destCity: "SF" } })).data.posts.find(p => p.notes === "bob deletes his own");
+await call("DELETE", "/api/posts/" + ownPost.id, { token: bob });
+r = await call("GET", "/api/logs?action=post.delete", { token: admin });
+const ownDel = r.data.rows.find(x => x.entity_id === ownPost.id);
+ok("an ordinary self-delete is not tagged asAdmin",
+   ownDel && JSON.parse(ownDel.detail).asAdmin === undefined, ownDel?.detail);
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail > 0 ? 1 : 0);

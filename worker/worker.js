@@ -380,9 +380,15 @@ async function loadBoard(env, session) {
   // database. `mine` carries the only thing the client actually needs, and it
   // is decided by the same ownsPost the write endpoints enforce, so the
   // button you can see and the action the server will allow can't disagree.
+  const viewerIsAdmin = !!session && isAdmin(env, session);
+
   return posts.map((p) => ({
     id: p.id,
+    // `mine` drives the owner styling and disables +1 on your own trip.
+    // `canManage` drives Edit/Delete, and is also true for admins on other
+    // people's posts — an admin can still +1 a trip they don't own.
     mine: !!session && ownsPost(p, session),
+    canManage: !!session && (ownsPost(p, session) || viewerIsAdmin),
     name: p.author_name,
     role: p.role,
     seats: p.seats,
@@ -473,6 +479,28 @@ function ownsPost(post, session) {
     !!post.author_name &&
     post.author_name.trim().toLowerCase() === session.name.trim().toLowerCase()
   );
+}
+
+function isAdmin(env, session) {
+  return (env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(session.email);
+}
+
+/**
+ * Who may edit or delete a post: its author, or an admin.
+ *
+ * Deliberately separate from ownsPost. Admins moderate — they take down a
+ * stale or inappropriate post — but they do not *own* it, and the difference
+ * matters in three places: an admin edit must not rewrite the post's author,
+ * an admin may still +1 someone else's trip, and every admin action on
+ * another person's post is logged as such. Collapsing the two concepts into
+ * one flag would quietly lose all three.
+ */
+function canManagePost(post, session, env) {
+  return ownsPost(post, session) || isAdmin(env, session);
 }
 
 // ----------------------------------------------------------------- handlers
@@ -569,10 +597,13 @@ async function handleUpdatePost(request, env, session, id) {
     .bind(id)
     .first();
   if (!existing) return fail("NOT_FOUND", "This post was removed — refresh the page.", 404, request, env);
-  if (!ownsPost(existing, session)) {
+  if (!canManagePost(existing, session, env)) {
     await logEvent(env, request, session, "post.update.denied", "post", id, null);
     return fail("FORBIDDEN", "You can only edit your own posts.", 403, request, env);
   }
+  // True when an admin is editing somebody else's post. Used to keep
+  // ownership where it belongs and to mark the action in the log.
+  const asAdmin = !ownsPost(existing, session);
 
   const body = await request.json().catch(() => ({}));
   const v = validatePostBody(body);
@@ -589,7 +620,12 @@ async function handleUpdatePost(request, env, session, id) {
     .bind(
       f.role, f.seats, f.date, f.time, f.notes,
       f.originCity, f.destCity, f.originRegion, f.destRegion,
-      session.email, Date.now(), id
+      // Editing your own pre-auth post stamps your verified email in, which
+      // is how a legacy post stops relying on the name fallback. An admin
+      // fixing someone else's post must not do that — it would silently
+      // reassign authorship — so pass NULL and leave the column alone.
+      asAdmin ? null : session.email,
+      Date.now(), id
     )
     .run();
 
@@ -605,7 +641,8 @@ async function handleUpdatePost(request, env, session, id) {
       changed[key] = { from: existing[col], to: f[key] };
     }
   }
-  await logEvent(env, request, session, "post.update", "post", id, { changed });
+  await logEvent(env, request, session, "post.update", "post", id,
+    asAdmin ? { changed, asAdmin: true, author: existing.author_name } : { changed });
 
   return json({ posts: await loadBoard(env, session) }, 200, request, env);
 }
@@ -615,10 +652,11 @@ async function handleDeletePost(request, env, session, id) {
     .bind(id)
     .first();
   if (!existing) return fail("NOT_FOUND", "This post was already removed.", 404, request, env);
-  if (!ownsPost(existing, session)) {
+  if (!canManagePost(existing, session, env)) {
     await logEvent(env, request, session, "post.delete.denied", "post", id, null);
     return fail("FORBIDDEN", "You can only delete your own posts.", 403, request, env);
   }
+  const asAdmin = !ownsPost(existing, session);
 
   // Soft delete: the row stays, so the audit entry still points at something
   // real and a mistaken delete is one UPDATE away from being undone.
@@ -631,6 +669,7 @@ async function handleDeletePost(request, env, session, id) {
     route: `${existing.origin_city} → ${existing.dest_city}`,
     date: existing.trip_date,
     author: existing.author_name,
+    ...(asAdmin ? { asAdmin: true } : {}),
   });
 
   return json({ posts: await loadBoard(env, session) }, 200, request, env);
@@ -696,14 +735,6 @@ async function handleTogglePlusOne(request, env, session, postId) {
   }
 
   return json({ posts: await loadBoard(env, session) }, 200, request, env);
-}
-
-function isAdmin(env, session) {
-  return (env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean)
-    .includes(session.email);
 }
 
 async function handleLogs(request, env, session, url) {

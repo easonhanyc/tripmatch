@@ -666,6 +666,117 @@
      that ownership is a real verified identity rather than a name guess. */
   .row.is-mine { box-shadow: inset 2px 0 0 var(--gold); }
 
+
+  /* A <button> that reads as the link next to it — used for "How it works",
+     which opens a dialog rather than navigating, so it must not be an <a>. */
+  .linkish {
+    background: none;
+    /* Reset three sides only. `border: none` here would also wipe the
+       border-bottom that .contact-link uses as its underline, which is the
+       whole visual cue that this is clickable. */
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    padding: 0;
+    /* No font properties here: .contact-link already sets family, size and
+       letter-spacing, and anything declared in this later rule would win
+       over them — which is how this button ended up bigger than the link
+       sitting beside it. */
+    cursor: pointer;
+  }
+  .linkish:hover { color: #fff; border-bottom-color: #fff; }
+
+  /* Edit/Delete shown to an admin on somebody else's post. Marked so a
+     moderation action never looks like an ordinary one — the risk is
+     deleting a classmate's trip while believing it's your own. */
+  .edit-btn.as-admin, .delete-btn.as-admin {
+    border-style: dashed;
+    border-color: var(--gold-deep);
+    color: var(--gold-deep);
+  }
+  .delete-btn.as-admin { border-color: #b3261e; color: #b3261e; }
+
+  /* ------------------------------------------------------- how-it-works -- */
+
+  .how-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 22, 34, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 60;
+  }
+  .how-sheet {
+    background: var(--panel);
+    border-radius: 14px;
+    max-width: 520px;
+    width: 100%;
+    max-height: 88vh;
+    overflow-y: auto;
+    box-shadow: 0 12px 40px rgba(0, 27, 51, 0.28);
+  }
+  .how-head {
+    background: var(--blue);
+    color: #fff;
+    padding: 20px 24px 17px;
+    border-bottom: 4px solid var(--gold);
+    position: sticky;
+    top: 0;
+  }
+  .how-head h3 { margin: 0; font-family: 'Fraunces', serif; font-size: 22px; font-weight: 600; }
+  .how-head p { margin: 5px 0 0; font-size: 13px; opacity: 0.88; }
+  .how-body { padding: 20px 24px 4px; }
+
+  .how-step { display: flex; gap: 13px; margin-bottom: 18px; }
+  .how-num {
+    flex: none;
+    width: 25px; height: 25px;
+    border-radius: 50%;
+    background: var(--gold);
+    color: var(--blue-deep);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .how-step h4 { margin: 2px 0 3px; font-size: 14.5px; font-weight: 600; }
+  .how-step p { margin: 0; font-size: 13.2px; color: var(--ink-soft); line-height: 1.55; }
+
+  .how-note {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 13px 15px;
+    margin: 4px 0 18px;
+    font-size: 12.8px;
+    color: var(--ink-soft);
+    line-height: 1.6;
+  }
+  .how-note strong { color: var(--ink); }
+  .how-note + .how-note { margin-top: -8px; }
+
+  .how-foot {
+    padding: 0 24px 22px;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .how-foot button {
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    border-radius: 9px;
+    padding: 11px 26px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .how-foot button:hover { background: var(--blue-deep); }
+
   .other-city { margin-top: 8px; }
   .hidden { display: none !important; }
 </style>
@@ -714,8 +825,8 @@
         </div>
       </div>
       <div class="header-top-row">
+        <button type="button" class="contact-link linkish" id="howLink">How it works</button>
         <a class="contact-link" href="mailto:eason_han@berkeley.edu">Bug or issue? Email eason_han@berkeley.edu</a>
-        <a class="contact-link hidden" id="logsLink" href="logs.html">Activity log</a>
       </div>
       <h1 class="wordmark">TripMatch</h1>
       <p class="tagline">Post a trip, see who else is going your way. No more scrolling the group chat.</p>
@@ -1227,8 +1338,6 @@
       render(); // draw what we have, with the banner explaining why
     }
 
-    var meRes = await api("/api/me");
-    if (meRes.ok && meRes.data.isAdmin) document.getElementById("logsLink").classList.remove("hidden");
   }
 
   async function init() {
@@ -1288,6 +1397,11 @@
     var plusOnes = p.plusOnes || [];
     var expanded = !!state.expanded[p.id];
     var isOwner = isMine(p);
+    // Admins can manage posts they don't own. Keeping the two apart means the
+    // gold owner edge and the disabled +1 still mean "this is yours", while
+    // Edit/Delete appear wherever you're actually allowed to use them.
+    var canManage = !!p.canManage;
+    var managingOther = canManage && !isOwner;
     var confirming = !!state.confirmingDelete[p.id];
     var joined = plusOnes.some(function (po) { return po.mine; });
     var html = '<div class="row' + (isOwner ? ' is-mine' : '') + '" data-post-id="' + p.id + '">';
@@ -1315,16 +1429,19 @@
     var plusOneTitle = plusOnes.length ? plusOnes.map(function (po) { return po.name; }).join(', ') : 'Also going this way? Count yourself in.';
     html += '<button type="button" class="' + plusOneClass + '" data-id="' + p.id + '"' + (isOwner ? ' disabled title="This is your own post"' : ' title="' + escapeHtml(plusOneTitle) + '"') + '>' + plusOneLabel + '</button>';
     html += '<button class="comment-btn' + (comments.length ? ' has-comments' : '') + '" data-id="' + p.id + '">💬 ' + comments.length + '</button>';
-    if (isOwner) {
-      html += '<button class="edit-btn" data-id="' + p.id + '">Edit</button>';
-      html += '<button class="delete-btn" data-id="' + p.id + '">Delete</button>';
+    if (canManage) {
+      var adminMark = managingOther ? ' title="Admin action on someone else\'s post — this is recorded in the activity log"' : '';
+      html += '<button class="edit-btn' + (managingOther ? ' as-admin' : '') + '" data-id="' + p.id + '"' + adminMark + '>Edit</button>';
+      html += '<button class="delete-btn' + (managingOther ? ' as-admin' : '') + '" data-id="' + p.id + '"' + adminMark + '>Delete</button>';
     }
     html += '</div>';
     html += '</div>'; // row-summary
 
     if (confirming) {
       html += '<div class="row-confirm">';
-      html += '<span>Delete this post? This can\'t be undone.</span>';
+      html += '<span>' + (managingOther
+        ? 'Delete ' + escapeHtml(p.name) + '\'s post as admin? They aren\'t notified, and this is recorded in the activity log.'
+        : 'Delete this post? This can\'t be undone.') + '</span>';
       html += '<div class="row-confirm-actions">';
       html += '<button type="button" class="btn-cancel-delete" data-id="' + p.id + '">Cancel</button>';
       html += '<button type="button" class="btn-confirm-delete" data-id="' + p.id + '">Yes, delete</button>';
@@ -1645,6 +1762,8 @@
   }
 
   function buildTimeSelects(hourSel, minuteSel) {
+    // The hour keeps a blank option, because time is genuinely optional —
+    // leaving it blank is how you post a trip with no set departure.
     var h = '<option value="">--</option>';
     for (var i = 0; i < 24; i++) {
       var hv = String(i).padStart(2, "0");
@@ -1652,7 +1771,11 @@
     }
     hourSel.innerHTML = h;
 
-    var m = '<option value="">--</option>';
+    // Minutes default to 00 and have no blank option. Previously a time was
+    // only recorded when both wheels were set, so picking "09" and not
+    // touching minutes silently posted a trip with no time at all — the
+    // person thought they'd said 9am. Now an hour on its own means o'clock.
+    var m = "";
     for (var j = 0; j < 60; j += 5) {
       var mv = String(j).padStart(2, "0");
       m += '<option value="' + mv + '">' + mv + '</option>';
@@ -1757,7 +1880,7 @@
       if (editPost.time) {
         var tparts = editPost.time.split(":");
         backdrop.querySelector("#f_hour").value = tparts[0] || "";
-        backdrop.querySelector("#f_minute").value = tparts[1] || "";
+        backdrop.querySelector("#f_minute").value = tparts[1] || "00";
       }
       if (editPost.notes) backdrop.querySelector("#f_notes").value = editPost.notes;
     }
@@ -1784,7 +1907,8 @@
       var date = backdrop.querySelector("#f_date").value;
       var hourVal = backdrop.querySelector("#f_hour").value;
       var minuteVal = backdrop.querySelector("#f_minute").value;
-      var time = (hourVal && minuteVal) ? (hourVal + ":" + minuteVal) : "";
+      // No hour means no time. An hour with minutes untouched means o'clock.
+      var time = hourVal ? (hourVal + ":" + (minuteVal || "00")) : "";
       var notes = backdrop.querySelector("#f_notes").value.trim();
 
       var originCity = originSel.value === "__other__" ? backdrop.querySelector("#f_originOther").value.trim() : originSel.value;
@@ -1846,7 +1970,93 @@
     });
   }
 
+
+  // ---------- how it works ----------
+  //
+  // A dialog rather than a separate page: someone who needs this is mid-task
+  // on the board, and sending them away loses their place. Content is the
+  // four things that actually confuse people on first use, not a feature tour.
+
+  function openHowTo() {
+    if (document.querySelector(".how-backdrop")) return;
+
+    var backdrop = document.createElement("div");
+    backdrop.className = "how-backdrop";
+    backdrop.setAttribute("role", "dialog");
+    backdrop.setAttribute("aria-modal", "true");
+    backdrop.setAttribute("aria-label", "How TripMatch works");
+    backdrop.innerHTML =
+      '<div class="how-sheet">' +
+      '<div class="how-head">' +
+      '<h3>How TripMatch works</h3>' +
+      '<p>Find someone going your way, or fill the empty seats in your car.</p>' +
+      '</div>' +
+      '<div class="how-body">' +
+
+      '<div class="how-step"><div class="how-num">1</div><div>' +
+      '<h4>Check the board first</h4>' +
+      '<p>Trips are grouped by route and date. If more than one day is showing, tap a date chip to jump straight to it, ' +
+      'or use the counts at the top to see only drivers or only riders.</p>' +
+      '</div></div>' +
+
+      '<div class="how-step"><div class="how-num">2</div><div>' +
+      '<h4>Already going? +1 instead of posting</h4>' +
+      '<p>If a trip already matches yours, tap <strong>+1</strong> rather than adding a duplicate. ' +
+      'The driver sees your name and knows you\'re interested, and the board stays readable.</p>' +
+      '</div></div>' +
+
+      '<div class="how-step"><div class="how-num">3</div><div>' +
+      '<h4>Nothing matches? Post your trip</h4>' +
+      '<p>Tap <strong>+ Post a trip</strong>, say whether you\'re driving or need a ride, pick your route and date. ' +
+      'Time is optional — leave it blank if you\'re flexible. Drivers, add how many seats are free.</p>' +
+      '</div></div>' +
+
+      '<div class="how-step"><div class="how-num">4</div><div>' +
+      '<h4>Sort out the details in the comments</h4>' +
+      '<p>Use the speech-bubble button on any trip to ask about pickup points, luggage or timing. ' +
+      'Swap numbers there and finish planning wherever you normally would.</p>' +
+      '</div></div>' +
+
+      '<div class="how-note">' +
+      '<strong>Your posts stay yours.</strong> Because you sign in with your Berkeley account, you can edit or delete ' +
+      'your trips from any device — your laptop and your phone both work.' +
+      '</div>' +
+
+      '<div class="how-note">' +
+      '<strong>Old trips clear themselves.</strong> A trip disappears from the board once its date has passed, ' +
+      'so there\'s nothing to tidy up. If plans change before then, edit or delete it yourself.' +
+      '</div>' +
+
+      '<div class="how-note">' +
+      'Only <strong>@berkeley.edu</strong> accounts can see or post on this board. Your name shows on your posts; ' +
+      'your email address is never shown to anyone else. <a href="privacy.html">What we collect</a>.' +
+      '</div>' +
+
+      '</div>' +
+      '<div class="how-foot"><button type="button" class="how-close">Got it</button></div>' +
+      '</div>';
+
+    document.body.appendChild(backdrop);
+
+    function close() {
+      if (backdrop.parentNode) document.body.removeChild(backdrop);
+      document.removeEventListener("keydown", onKey);
+    }
+    function onKey(e) { if (e.key === "Escape") close(); }
+
+    backdrop.querySelector(".how-close").addEventListener("click", close);
+    backdrop.addEventListener("click", function (e) { if (e.target === backdrop) close(); });
+    document.addEventListener("keydown", onKey);
+
+    // Focus the close button so Esc and Tab behave, but suppress the scroll
+    // that focusing normally triggers — the button sits at the bottom of a
+    // scrolling sheet, so without preventScroll the dialog opens at step 4.
+    backdrop.querySelector(".how-close").focus({ preventScroll: true });
+    backdrop.querySelector(".how-sheet").scrollTop = 0;
+  }
+
   document.getElementById("openFab").addEventListener("click", function () { openSheet(); });
+  document.getElementById("howLink").addEventListener("click", openHowTo);
 
   init();
 })();
