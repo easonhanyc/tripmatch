@@ -214,6 +214,7 @@ Walk it in a private window, in this order:
 - [ ] **Delete** with the two-step confirm
 - [ ] `logs.html` opens for your admin account and shows every action above
 - [ ] `logs.html` is **refused** for a non-admin account
+- [ ] Send feedback from the board, then check the **Feedback tab** on `logs.html` shows it in full
 - [ ] Turn on airplane mode and tap +1 → the **offline banner** appears
 - [ ] Turn it off → the banner clears on its own
 

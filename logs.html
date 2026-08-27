@@ -126,6 +126,33 @@
     margin-right: 5px;
   }
 
+  .tabs { display: flex; gap: 2px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .tab {
+    font-family: 'IBM Plex Sans', sans-serif; font-weight: 600; font-size: 13px;
+    padding: 9px 14px; border: none; background: none; color: var(--ink-soft);
+    cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--blue); border-bottom-color: var(--gold); }
+
+  /* One report per card rather than a table row: feedback is prose, and the
+     whole point of this tab is reading it in full instead of the 120-char
+     preview the activity log shows. */
+  .fb-card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 13px 15px; margin-bottom: 10px;
+  }
+  .fb-card-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 9px; }
+  .fb-card-head .when { margin-left: auto; color: var(--ink-soft); }
+  .fb-card-head .who-email { display: inline; color: var(--ink-soft); text-decoration: none; }
+  .fb-card-head .who-email:hover { color: var(--blue); text-decoration: underline; }
+  .fb-text { font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .fb-meta {
+    margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line-soft);
+    font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+    color: var(--ink-soft); word-break: break-all;
+  }
+
   .empty { padding: 40px 20px; text-align: center; color: var(--ink-soft); font-size: 13.5px; }
   .hidden { display: none !important; }
 </style>
@@ -143,6 +170,11 @@
 </header>
 
 <main class="wrap">
+  <nav class="tabs" role="tablist">
+    <button type="button" class="tab active" id="tabLog" role="tab" aria-selected="true">Activity</button>
+    <button type="button" class="tab" id="tabFeedback" role="tab" aria-selected="false">Feedback</button>
+  </nav>
+
   <div id="notice" class="notice info">Loading the log…</div>
 
   <div id="content" class="hidden">
@@ -174,6 +206,23 @@
     </div>
     <div class="empty hidden" id="emptyState">No log entries match these filters.</div>
   </div>
+
+  <div id="feedback" class="hidden">
+    <div class="totals" id="fbTotals"></div>
+
+    <div class="controls">
+      <select id="fbKind">
+        <option value="">All kinds</option>
+        <option value="bug">Something's broken</option>
+        <option value="idea">An idea</option>
+        <option value="other">Something else</option>
+      </select>
+      <button type="button" class="primary" id="fbReloadBtn">Reload</button>
+    </div>
+
+    <div id="fbList"></div>
+    <div class="empty hidden" id="fbEmpty">Nothing here yet.</div>
+  </div>
 </main>
 
 <script>
@@ -199,6 +248,37 @@
 
   function token() {
     try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
+  }
+
+  // Both tabs hit admin-only endpoints behind the same session, so they fail
+  // in exactly the same ways. One helper returns either the parsed body or a
+  // ready-to-show message, and neither caller has to re-litigate 401 vs 403.
+  async function apiGet(path) {
+    var t = token();
+    if (!t) {
+      return { err: 'You\'re not signed in. <a href="index.html">Open the board</a> and sign in with your ' +
+        'Berkeley account first — this page uses the same session.' };
+    }
+    if (API_BASE.indexOf("REPLACE_WITH") !== -1) {
+      return { err: "This page isn't configured yet — set <code>API_BASE</code> near the top of logs.html to match index.html." };
+    }
+
+    var res;
+    try {
+      res = await fetch(API_BASE + path, {
+        headers: { Authorization: "Bearer " + t },
+        cache: "no-store"
+      });
+    } catch (e) {
+      return { err: "Couldn't reach the TripMatch API. Check your connection and reload." };
+    }
+
+    if (res.status === 401) return { err: 'Your session expired. <a href="index.html">Sign in again</a>, then come back.' };
+    if (res.status === 403) return { err: "This account isn't a TripMatch admin. Add it to the <code>ADMIN_EMAILS</code> worker secret to grant access." };
+    if (!res.ok) return { err: "The API returned an error (" + res.status + "). Try again in a moment." };
+
+    try { return { data: await res.json() }; }
+    catch (e) { return { err: "The API returned something this page couldn't read. Try again in a moment." }; }
   }
 
   function fmtTime(ms) {
@@ -269,18 +349,6 @@
   var allActions = [];
 
   async function load() {
-    var t = token();
-    if (!t) {
-      notice("error",
-        'You\'re not signed in. <a href="index.html">Open the board</a> and sign in with your Berkeley account first — ' +
-        'the activity log uses the same session.');
-      return;
-    }
-    if (API_BASE.indexOf("REPLACE_WITH") !== -1) {
-      notice("error", "This page isn't configured yet — set <code>API_BASE</code> near the top of logs.html to match index.html.");
-      return;
-    }
-
     var params = new URLSearchParams();
     params.set("limit", "2000");
     var action = document.getElementById("fAction").value;
@@ -290,33 +358,13 @@
     if (actor) params.set("actor", actor);
     if (days) params.set("since", String(Date.now() - days * 86400000));
 
-    var res;
-    try {
-      res = await fetch(API_BASE + "/api/logs?" + params.toString(), {
-        headers: { Authorization: "Bearer " + t },
-        cache: "no-store"
-      });
-    } catch (e) {
-      notice("error", "Couldn't reach the TripMatch API. Check your connection and reload.");
-      return;
-    }
+    var got = await apiGet("/api/logs?" + params.toString());
+    if (got.err) { notice("error", got.err); return; }
 
-    if (res.status === 401) {
-      notice("error", 'Your session expired. <a href="index.html">Sign in again</a>, then come back.');
-      return;
-    }
-    if (res.status === 403) {
-      notice("error", "This account isn't a TripMatch admin. Add it to the <code>ADMIN_EMAILS</code> worker secret to grant access.");
-      return;
-    }
-    if (!res.ok) {
-      notice("error", "The API returned an error (" + res.status + "). Try again in a moment.");
-      return;
-    }
-
-    var data = await res.json();
+    var data = got.data;
+    logReady = true;
     document.getElementById("notice").classList.add("hidden");
-    document.getElementById("content").classList.remove("hidden");
+    syncPanels();
 
     var byAction = (data.totals && data.totals.byAction) || [];
     var total = byAction.reduce(function (n, r) { return n + r.n; }, 0);
@@ -356,6 +404,93 @@
       "</tr>";
     }).join("");
   }
+
+  // ---------- feedback ----------
+  //
+  // The activity log records a feedback.create with a 120-char preview, which
+  // is enough to notice a report arrived and not enough to act on it. This
+  // tab reads the same submissions from /api/feedback in full.
+
+  var fbAll = [];
+
+  var KIND_LABEL = { bug: "broken", idea: "idea", other: "other" };
+
+  function renderFeedback() {
+    var kind = document.getElementById("fbKind").value;
+    var rows = fbAll.filter(function (r) { return !kind || r.kind === kind; });
+
+    var counts = { bug: 0, idea: 0, other: 0 };
+    fbAll.forEach(function (r) { if (counts[r.kind] != null) counts[r.kind]++; });
+    document.getElementById("fbTotals").innerHTML =
+      '<div class="total"><b>' + fbAll.length + "</b> reports</div>" +
+      '<div class="total"><b>' + counts.bug + "</b> broken</div>" +
+      '<div class="total"><b>' + counts.idea + "</b> ideas</div>" +
+      '<div class="total"><b>' + counts.other + "</b> other</div>";
+
+    var empty = document.getElementById("fbEmpty");
+    empty.classList.toggle("hidden", rows.length > 0);
+    empty.textContent = kind ? "No feedback of this kind yet." : "Nobody has sent feedback yet.";
+
+    document.getElementById("fbList").innerHTML = rows.map(function (r) {
+      return '<div class="fb-card">' +
+        '<div class="fb-card-head">' +
+          '<span class="fb-kind-tag">' + escapeHtml(KIND_LABEL[r.kind] || r.kind) + "</span>" +
+          '<span class="who">' + escapeHtml(r.author_name || "—") + "</span>" +
+          '<a class="who-email" href="mailto:' + escapeHtml(r.author_email) + '">' + escapeHtml(r.author_email) + "</a>" +
+          '<span class="mono when">' + fmtTime(r.created_at) + "</span>" +
+        "</div>" +
+        '<div class="fb-text">' + escapeHtml(r.body) + "</div>" +
+        (r.user_agent ? '<div class="fb-meta">' + escapeHtml(r.user_agent) + "</div>" : "") +
+      "</div>";
+    }).join("");
+  }
+
+  async function loadFeedback() {
+    var got = await apiGet("/api/feedback?limit=500");
+    if (got.err) { notice("error", got.err); return; }
+
+    fbAll = got.data.rows || [];
+    fbReady = true;
+    document.getElementById("notice").classList.add("hidden");
+    syncPanels();
+    renderFeedback();
+  }
+
+  // ---------- tabs ----------
+
+  var activeTab = "log";
+  var logReady = false;
+  var fbReady = false;
+
+  function syncPanels() {
+    document.getElementById("content").classList.toggle("hidden", !(activeTab === "log" && logReady));
+    document.getElementById("feedback").classList.toggle("hidden", !(activeTab === "feedback" && fbReady));
+  }
+
+  // Each tab loads the first time it's opened, and retries on every later
+  // visit until it succeeds — so a tab that failed while the session was
+  // expired recovers by being clicked again after signing back in.
+  function selectTab(name) {
+    activeTab = name;
+    var isLog = name === "log";
+    var logTab = document.getElementById("tabLog");
+    var fbTab = document.getElementById("tabFeedback");
+    logTab.classList.toggle("active", isLog);
+    fbTab.classList.toggle("active", !isLog);
+    logTab.setAttribute("aria-selected", String(isLog));
+    fbTab.setAttribute("aria-selected", String(!isLog));
+
+    document.getElementById("notice").classList.add("hidden");
+    syncPanels();
+
+    if (isLog && !logReady) { notice("info", "Loading the log…"); load(); }
+    if (!isLog && !fbReady) { notice("info", "Loading feedback…"); loadFeedback(); }
+  }
+
+  document.getElementById("tabLog").addEventListener("click", function () { selectTab("log"); });
+  document.getElementById("tabFeedback").addEventListener("click", function () { selectTab("feedback"); });
+  document.getElementById("fbKind").addEventListener("change", renderFeedback);
+  document.getElementById("fbReloadBtn").addEventListener("click", loadFeedback);
 
   document.getElementById("reloadBtn").addEventListener("click", load);
   document.getElementById("fAction").addEventListener("change", load);

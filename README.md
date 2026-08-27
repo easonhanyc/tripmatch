@@ -19,6 +19,7 @@ Anyone with a Berkeley account can post a trip — offering seats or looking for
 - **Edit or delete your own post** — matched to your verified account, so it works from any device, with a two-step confirm before anything is deleted
 - **Automatic expiry** — a post disappears from the board once its trip date has passed
 - **Activity log** — every post, edit, delete, comment, +1 and sign-in is recorded with who and when, readable at `logs.html` by admins
+- **Feedback inbox** — the in-app "issues or suggestions" form writes to the same backend, and a Feedback tab on `logs.html` shows each report in full, filterable by kind, with a mailto link back to the sender
 - **Failure banner** — if TripMatch can't reach its backend, the page says so plainly instead of looking like an empty board
 
 ## How it's built
