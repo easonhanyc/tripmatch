@@ -14,7 +14,7 @@ Anyone with a Berkeley account can post a trip — offering seats or looking for
 - **Post a trip** — role (driving / need a ride), origin and destination city, date, optional time and notes
 - **Grouped, filterable board** — routes grouped by region + date, with one-click filters for role and date
 - **Comments** — ask a question on someone's post without leaving the page
-- **+1 a post** — fit an existing trip exactly? Count yourself in instead of posting a duplicate
+- **Take a seat / +1** — on a driver's post, claiming a seat is capped at the seats offered: the badge counts down, and a full car shows as Full. On a rider's post it stays an uncapped "+1", since several people wanting the same trip is useful signal to a driver
 - **Edit or delete your own post** — matched to your verified account, so it works from any device, with a two-step confirm before anything is deleted
 - **Automatic expiry** — a post disappears from the board once its trip date has passed
 - **Activity log** — every post, edit, delete, comment, +1 and sign-in is recorded with who and when, readable at `logs.html` by admins

@@ -75,6 +75,19 @@ above the board covering offline, unreachable, server error, rate limited, and
 expired session — each with the action that might fix it, and the empty board
 now distinguishes "nothing here" from "couldn't ask".
 
+### 5. Joining a driver's trip became a capped seat claim (Aug 26, later)
+
+"+1" was ambiguous on a driver's post — it read as either "I want a seat" or
+"I'm also driving that way" — and nothing enforced capacity, so six people
+could +1 a car with three seats. Joining is now role-dependent: a capped
+**seat claim** on driver posts (with a counting-down badge and a Full state),
+and an uncapped **+1** on rider posts, where multiple interested riders is
+signal rather than a conflict.
+
+The cap is enforced inside the INSERT, so two people tapping the last seat at
+the same instant cannot both get in — verified by a test that fires ten
+simultaneous claims at a one-seat car and asserts exactly one wins.
+
 ### 4. Storage rebuilt on Cloudflare Workers + D1
 
 The v1 JSONBin design had three defects that all bite inside the expected
@@ -128,6 +141,8 @@ of them survive, which the v1 design would have failed.
 - As a poster whose details changed, I want to edit my own post in place so I don't have to delete and repost (losing any comments) just to fix a time or seat count.
 - As a student browsing a board with many trip dates active at once, I want to jump straight to one date's trips so I don't have to scroll past everything else to find mine.
 - As a student who fits an existing trip exactly, I want to +1 it so the poster sees interest without a redundant duplicate post cluttering the board.
+- As a rider looking at a driver's post, I want to claim one of their seats and see how many are left, so I know whether there is actually room for me before I plan around it.
+- As a driver, I want claiming to stop once my seats are gone, so I don't arrive to find more people expecting a lift than I can carry.
 
 ---
 
@@ -148,7 +163,8 @@ of them survive, which the v1 design would have failed.
 | Owner-only post deletion | Given a post exists, when the viewer's remembered name matches the post's poster name, then a Delete control is shown; deleting requires a second confirmation step before the post is removed from shared storage. |
 | Owner-only post editing | Given a post exists and the viewer is its owner (by the same name match as deletion), then an Edit control is shown that reopens the post form pre-filled with the post's current values; saving updates the existing entry in place, preserving its comments and original post time. |
 | Date-filter summary row | Given the board has posts spanning more than one trip date, when a viewer opens the board, then a row of date chips (each showing the date and its post count) appears above the grouped list, and selecting one narrows the board to that date; the row is hidden when only one date is present. |
-| Interest counter ("+1") | Given a post exists and the viewer is not its owner, then a "+1" control shows the running count of others also interested; tapping it toggles the viewer's own name on/off that list (prompting for a name first if none is remembered yet) instead of requiring a brand-new duplicate post. |
+| Seat claim (driver posts) | Given a driver's post with N seats and the viewer is not its owner, then a "Take a seat" control is shown and the badge reports seats remaining; claiming adds the viewer to the trip and decrements the count. When N seats are claimed the control becomes a disabled "Full" and further claims are refused server-side, including when two people claim the last seat simultaneously. A rider who has claimed a seat may release it, freeing it for someone else. |
+| Interest counter, "+1" (rider posts) | Given a rider's post and the viewer is not its owner, then a "+1" control shows the running count of others going the same way; tapping it toggles the viewer on or off that list. Uncapped, since several riders wanting the same trip is signal to a driver rather than a conflict. |
 
 ### Nice-to-Have (P1)
 
