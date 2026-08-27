@@ -15,6 +15,7 @@ Anyone with a Berkeley account can post a trip — offering seats or looking for
 - **Grouped, filterable board** — routes grouped by region + date, with one-click filters for role and date
 - **Comments** — ask a question on someone's post without leaving the page
 - **Take a seat / +1** — on a driver's post, claiming a seat is capped at the seats offered: the badge counts down, and a full car shows as Full. On a rider's post it stays an uncapped "+1", since several people wanting the same trip is useful signal to a driver
+- **Bring someone along** — a claim can cover more than one traveller, for family or friends without a Berkeley email. Seats remaining is the sum of party sizes, and the roster shows "Bob Rivera +1" so a driver can tell three claims from four passengers
 - **Edit or delete your own post** — matched to your verified account, so it works from any device, with a two-step confirm before anything is deleted
 - **Automatic expiry** — a post disappears from the board once its trip date has passed
 - **Activity log** — every post, edit, delete, comment, +1 and sign-in is recorded with who and when, readable at `logs.html` by admins
