@@ -539,6 +539,113 @@ ok("refused claims are logged too", r.data.rows.length >= 9, { got: r.data.rows.
 r = await call("GET", "/api/logs?action=plusone.add", { token: admin });
 ok("rider me-toos stay plusone.add", r.data.rows.length > 0);
 
+
+// --------------------------------------------------------- PARTY SIZE
+group("Travelling with someone who isn't on TripMatch");
+
+const bigCar = (await call("POST", "/api/posts", { token: alice, body: {
+  role: "driver", seats: 4, date: tomorrow, time: "06:00", notes: "party size car",
+  originCity: "Berkeley", destCity: "San Francisco",
+  originRegion: "East Bay / Campus", destRegion: "San Francisco" } })).data.posts
+  .find(p => p.notes === "party size car");
+
+const seatsOf = async (tok, id) => {
+  const b = (await call("GET", "/api/board", { token: tok })).data.posts.find(p => p.id === id);
+  return { taken: b.seatsTaken, left: b.seats - b.seatsTaken, rows: b.plusOnes.length };
+};
+
+r = await call("POST", "/api/posts/" + bigCar.id + "/plusone", { token: bob, body: { party: 2 } });
+ok("a rider can claim two seats", r.status === 200, r.data);
+let st = await seatsOf(alice, bigCar.id);
+ok("two seats are counted from one claim", st.taken === 2 && st.rows === 1, st);
+
+r = await call("POST", "/api/posts/" + bigCar.id + "/plusone", { token: voters[0], body: { party: 3 } });
+ok("a claim larger than the space left is refused", r.status === 409, r.data);
+ok("the refusal says how many are actually free",
+   /Only 2 seats left/.test(r.data.error.message), r.data.error.message);
+
+st = await seatsOf(alice, bigCar.id);
+ok("a refused claim changes nothing", st.taken === 2, st);
+
+r = await call("POST", "/api/posts/" + bigCar.id + "/plusone", { token: voters[0], body: { party: 2 } });
+ok("a claim that exactly fits succeeds", r.status === 200, r.data);
+st = await seatsOf(alice, bigCar.id);
+ok("the car is now full at 4 across 2 claims", st.taken === 4 && st.left === 0 && st.rows === 2, st);
+
+r = await call("POST", "/api/posts/" + bigCar.id + "/plusone", { token: voters[1], body: { party: 1 } });
+ok("a full car refuses even a single seat", r.status === 409, r.data);
+ok("the full-car message is used when nothing is left",
+   /car is full/.test(r.data.error.message), r.data.error.message);
+
+// Changing your own party size must not double-count the seats you already hold.
+r = await call("POST", "/api/posts/" + bigCar.id + "/plusone", { token: bob, body: { party: 1 } });
+ok("shrinking your own claim is allowed in a full car", r.status === 200, r.data);
+st = await seatsOf(alice, bigCar.id);
+ok("shrinking frees a seat", st.taken === 3 && st.left === 1, st);
+
+r = await call("POST", "/api/posts/" + bigCar.id + "/plusone", { token: bob, body: { party: 2 } });
+ok("growing back into the free seat works", r.status === 200, r.data);
+st = await seatsOf(alice, bigCar.id);
+ok("car is full again", st.taken === 4, st);
+
+r = await call("POST", "/api/posts/" + bigCar.id + "/plusone", { token: bob, body: { party: 3 } });
+ok("growing beyond the free space is refused", r.status === 409, r.data);
+st = await seatsOf(alice, bigCar.id);
+ok("a refused resize leaves the original claim intact", st.taken === 4, st);
+
+// Tapping with no party field at all means "leave".
+r = await call("POST", "/api/posts/" + bigCar.id + "/plusone", { token: bob });
+ok("tapping again with no party leaves the trip", r.status === 200, r.data);
+st = await seatsOf(alice, bigCar.id);
+ok("leaving frees the whole party", st.taken === 2 && st.rows === 1, st);
+
+// The race, now with parties: 2 seats, everyone asking for 2.
+const twoSeat = (await call("POST", "/api/posts", { token: alice, body: {
+  role: "driver", seats: 2, date: tomorrow, notes: "party race",
+  originCity: "Berkeley", destCity: "Oakland",
+  originRegion: "East Bay / Campus", destRegion: "East Bay / Campus" } })).data.posts
+  .find(p => p.notes === "party race");
+
+const pairs = await Promise.all(
+  voters.slice(0, 8).map(t => call("POST", "/api/posts/" + twoSeat.id + "/plusone", { token: t, body: { party: 2 } }))
+);
+ok("exactly one pair wins a two-seat car", pairs.filter(x => x.status === 200).length === 1,
+   { won: pairs.filter(x => x.status === 200).length });
+st = await seatsOf(alice, twoSeat.id);
+ok("the car holds exactly two people", st.taken === 2, st);
+
+// Rider posts: uncapped, and the count is people not claims.
+const pairNeedsRide = (await call("POST", "/api/posts", { token: alice, body: {
+  role: "rider", partySize: 2, date: tomorrow, notes: "two of us need a ride",
+  originCity: "Berkeley", destCity: "San Jose",
+  originRegion: "East Bay / Campus", destRegion: "South Bay" } })).data.posts
+  .find(p => p.notes === "two of us need a ride");
+ok("a rider post records how many need a ride", pairNeedsRide.partySize === 2, pairNeedsRide);
+
+r = await call("POST", "/api/posts/" + pairNeedsRide.id + "/plusone", { token: bob, body: { party: 3 } });
+ok("+1 on a rider post accepts a party", r.status === 200, r.data);
+const rp = r.data.posts.find(p => p.id === pairNeedsRide.id);
+ok("the party size is carried back to the client", rp.plusOnes[0].party === 3, rp.plusOnes);
+
+r = await call("POST", "/api/posts", { token: alice, body: {
+  role: "rider", partySize: 9, date: tomorrow, originCity: "Berkeley", destCity: "SF" } });
+ok("an absurd party size on a post is rejected", r.status === 400, r.data);
+
+r = await call("POST", "/api/posts/" + pairNeedsRide.id + "/plusone", { token: voters[2], body: { party: 99 } });
+ok("an absurd party on a claim is clamped, not accepted as-is", r.status === 200, r.data);
+const clamped = r.data.posts.find(p => p.id === pairNeedsRide.id).plusOnes.find(o => o.name === "Student 2");
+ok("clamped to the maximum", clamped && clamped.party === 4, clamped);
+
+// A driver post ignores partySize — its seats column is already the net figure.
+r = await call("POST", "/api/posts", { token: alice, body: {
+  role: "driver", seats: 2, partySize: 3, date: tomorrow, notes: "driver ignores party",
+  originCity: "Berkeley", destCity: "SF" } });
+const dp = r.data.posts.find(p => p.notes === "driver ignores party");
+ok("a driver post ignores partySize", dp.partySize === 1, dp);
+
+r = await call("GET", "/api/logs?action=seat.claim", { token: admin });
+ok("seat claims log the party size", r.data.rows.some(x => JSON.parse(x.detail || "{}").party >= 2));
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail > 0 ? 1 : 0);

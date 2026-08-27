@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS posts (
   trip_date     TEXT NOT NULL,              -- 'YYYY-MM-DD', local Pacific day
   trip_time     TEXT NOT NULL DEFAULT '',   -- 'HH:MM' 24h, or ''
   notes         TEXT NOT NULL DEFAULT '',
+  -- Rider posts only: how many people need a ride, including the poster.
+  -- Driver posts leave this at 1 — their `seats` column already states how
+  -- many places are free for other people.
+  party_size    INTEGER NOT NULL DEFAULT 1,
   origin_city   TEXT NOT NULL,
   dest_city     TEXT NOT NULL,
   origin_region TEXT NOT NULL,
@@ -68,6 +72,11 @@ CREATE TABLE IF NOT EXISTS plus_ones (
   post_id      TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
   author_email TEXT NOT NULL,
   author_name  TEXT NOT NULL,
+  -- How many people this row accounts for. One account can speak for more
+  -- than one traveller — a partner, family without a Berkeley address, or a
+  -- classmate who didn't sign up — so a driver's remaining seats is the SUM
+  -- of this column, never a row count.
+  party_size   INTEGER NOT NULL DEFAULT 1,
   created_at   INTEGER NOT NULL,
   PRIMARY KEY (post_id, author_email)
 );

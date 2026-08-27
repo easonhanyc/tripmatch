@@ -39,6 +39,9 @@ const MAX_NOTES = 300;
 const MAX_COMMENT = 300;
 const MAX_NAME = 60;
 const MAX_CITY = 60;
+// A single account speaking for more than four travellers is almost certainly
+// a mistake rather than a carpool; cap it so one claim can't swallow a bus.
+const MAX_PARTY = 4;
 
 // ---------------------------------------------------------------- utilities
 
@@ -367,6 +370,7 @@ async function loadBoard(env, session) {
     if (bucket) {
       bucket.plusOnes.push({
         name: o.author_name,
+        party: o.party_size || 1,
         mine: !!session && o.author_email === session.email,
         createdAt: o.created_at,
       });
@@ -395,6 +399,11 @@ async function loadBoard(env, session) {
     date: p.trip_date,
     time: p.trip_time,
     notes: p.notes,
+    // Rider posts: how many people need a ride. Driver posts leave it at 1.
+    partySize: p.party_size || 1,
+    // Seats spoken for is the SUM of each claim's party size, not the number
+    // of claims — one person can be bringing someone who isn't on TripMatch.
+    seatsTaken: byPost.get(p.id).plusOnes.reduce((n, o) => n + o.party, 0),
     originCity: p.origin_city,
     destCity: p.dest_city,
     originRegion: p.origin_region,
@@ -447,11 +456,23 @@ function validatePostBody(body) {
   const originRegion = REGIONS.includes(body.originRegion) ? body.originRegion : "Other";
   const destRegion = REGIONS.includes(body.destRegion) ? body.destRegion : "Other";
 
+  // Only meaningful on a rider post. A driver's `seats` is already the number
+  // of places free for other people, so a party size there would double-count.
+  let partySize = 1;
+  if (role === "rider") {
+    partySize = parseInt(body.partySize, 10);
+    if (!Number.isInteger(partySize) || partySize < 1) partySize = 1;
+    if (partySize > MAX_PARTY) {
+      return { ok: false, message: `Post separately if more than ${MAX_PARTY} of you need a ride.` };
+    }
+  }
+
   return {
     ok: true,
     fields: {
       role,
       seats,
+      partySize,
       date,
       time,
       notes: cleanStr(body.notes, MAX_NOTES),
@@ -568,12 +589,12 @@ async function handleCreatePost(request, env, session) {
 
   await env.DB.prepare(
     `INSERT INTO posts
-       (id, author_email, author_name, role, seats, trip_date, trip_time, notes,
+       (id, author_email, author_name, role, seats, party_size, trip_date, trip_time, notes,
         origin_city, dest_city, origin_region, dest_region, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
-      id, session.email, session.name, v.fields.role, v.fields.seats,
+      id, session.email, session.name, v.fields.role, v.fields.seats, v.fields.partySize,
       v.fields.date, v.fields.time, v.fields.notes,
       v.fields.originCity, v.fields.destCity,
       v.fields.originRegion, v.fields.destRegion,
@@ -587,6 +608,7 @@ async function handleCreatePost(request, env, session) {
     date: v.fields.date,
     time: v.fields.time,
     seats: v.fields.seats,
+    ...(v.fields.partySize > 1 ? { partySize: v.fields.partySize } : {}),
   });
 
   return json({ id, posts: await loadBoard(env, session) }, 201, request, env);
@@ -612,13 +634,13 @@ async function handleUpdatePost(request, env, session, id) {
   const f = v.fields;
   await env.DB.prepare(
     `UPDATE posts SET
-       role = ?, seats = ?, trip_date = ?, trip_time = ?, notes = ?,
+       role = ?, seats = ?, party_size = ?, trip_date = ?, trip_time = ?, notes = ?,
        origin_city = ?, dest_city = ?, origin_region = ?, dest_region = ?,
        author_email = COALESCE(author_email, ?), updated_at = ?
      WHERE id = ?`
   )
     .bind(
-      f.role, f.seats, f.date, f.time, f.notes,
+      f.role, f.seats, f.partySize, f.date, f.time, f.notes,
       f.originCity, f.destCity, f.originRegion, f.destRegion,
       // Editing your own pre-auth post stamps your verified email in, which
       // is how a legacy post stops relying on the name fallback. An admin
@@ -633,7 +655,8 @@ async function handleUpdatePost(request, env, session, id) {
   // readable when you're trying to answer "who changed this and to what?"
   const changed = {};
   const map = {
-    role: "role", seats: "seats", trip_date: "date", trip_time: "time",
+    role: "role", seats: "seats", party_size: "partySize",
+    trip_date: "date", trip_time: "time",
     notes: "notes", origin_city: "originCity", dest_city: "destCity",
   };
   for (const [col, key] of Object.entries(map)) {
@@ -726,41 +749,71 @@ async function handleToggleInterest(request, env, session, postId) {
   }
 
   const isSeatClaim = post.role === "driver";
+  const body = await request.json().catch(() => ({}));
+
+  // How many people this claim covers. One account often speaks for two —
+  // a partner, family without a Berkeley address, or a classmate who didn't
+  // sign up — and counting them as one is how a driver ends up with more
+  // passengers than seats.
+  let party = parseInt(body.party, 10);
+  if (!Number.isInteger(party) || party < 1) party = 1;
+  if (party > MAX_PARTY) party = MAX_PARTY;
 
   const existing = await env.DB.prepare(
-    `SELECT 1 FROM plus_ones WHERE post_id = ? AND author_email = ?`
+    `SELECT party_size FROM plus_ones WHERE post_id = ? AND author_email = ?`
   )
     .bind(postId, session.email)
     .first();
 
-  if (existing) {
+  // Tapping again while already in is "leave", unless the caller is asking
+  // for a different party size — then it's a change (2 seats to 1, say),
+  // which must still respect the car's capacity.
+  if (existing && !(body.party !== undefined && party !== existing.party_size)) {
     await env.DB.prepare(`DELETE FROM plus_ones WHERE post_id = ? AND author_email = ?`)
       .bind(postId, session.email)
       .run();
     await logEvent(env, request, session, isSeatClaim ? "seat.release" : "plusone.remove", "post", postId,
-      { driver: post.author_name });
+      { driver: post.author_name, party: existing.party_size });
     return json({ posts: await loadBoard(env, session) }, 200, request, env);
   }
 
   if (isSeatClaim) {
-    // Capacity is enforced inside the INSERT rather than by reading the count
-    // and then writing. Two people tapping the last seat at the same moment
-    // would both pass a separate check and both get in; here SQLite evaluates
-    // the count and performs the insert as one statement, so exactly one of
-    // them wins and the other is told the seat went.
-    const res = await env.DB.prepare(
-      `INSERT OR IGNORE INTO plus_ones (post_id, author_email, author_name, created_at)
-       SELECT ?, ?, ?, ?
-        WHERE (SELECT COUNT(*) FROM plus_ones WHERE post_id = ?) < ?`
-    )
-      .bind(postId, session.email, session.name, Date.now(), postId, post.seats)
-      .run();
+    // The capacity test lives inside the statement rather than in a separate
+    // read, so two people claiming the last seats at the same moment can't
+    // both pass it. It sums party sizes and excludes this claimant's own
+    // existing row, so changing 2 seats to 1 doesn't count the old 2 twice.
+    const already = existing ? existing.party_size : 0;
+    const sql = existing
+      ? `UPDATE plus_ones SET party_size = ?
+          WHERE post_id = ? AND author_email = ?
+            AND (SELECT COALESCE(SUM(party_size), 0) FROM plus_ones
+                  WHERE post_id = ? AND author_email != ?) + ? <= ?`
+      : `INSERT INTO plus_ones (post_id, author_email, author_name, party_size, created_at)
+         SELECT ?, ?, ?, ?, ?
+          WHERE (SELECT COALESCE(SUM(party_size), 0) FROM plus_ones WHERE post_id = ?) + ? <= ?`;
+
+    const binds = existing
+      ? [party, postId, session.email, postId, session.email, party, post.seats]
+      : [postId, session.email, session.name, party, Date.now(), postId, party, post.seats];
+
+    const res = await env.DB.prepare(sql).bind(...binds).run();
 
     if (!(res.meta && res.meta.changes)) {
-      await logEvent(env, request, session, "seat.claim.full", "post", postId, { driver: post.author_name });
+      const takenRow = await env.DB.prepare(
+        `SELECT COALESCE(SUM(party_size), 0) AS taken FROM plus_ones WHERE post_id = ?`
+      )
+        .bind(postId)
+        .first();
+      const free = Math.max(0, post.seats - ((takenRow && takenRow.taken) || 0) + already);
+
+      await logEvent(env, request, session, "seat.claim.full", "post", postId,
+        { driver: post.author_name, wanted: party, free });
+
       return fail(
         "SEATS_FULL",
-        `${post.author_name}'s car is full — all ${post.seats} seat${post.seats === 1 ? "" : "s"} are taken.`,
+        free === 0
+          ? `${post.author_name}'s car is full — all ${post.seats} seat${post.seats === 1 ? "" : "s"} are taken.`
+          : `Only ${free} seat${free === 1 ? "" : "s"} left in ${post.author_name}'s car, and you asked for ${party}.`,
         409,
         request,
         env
@@ -770,15 +823,26 @@ async function handleToggleInterest(request, env, session, postId) {
     await logEvent(env, request, session, "seat.claim", "post", postId, {
       driver: post.author_name,
       seats: post.seats,
+      party,
     });
   } else {
-    await env.DB.prepare(
-      `INSERT OR IGNORE INTO plus_ones (post_id, author_email, author_name, created_at)
-       VALUES (?, ?, ?, ?)`
-    )
-      .bind(postId, session.email, session.name, Date.now())
-      .run();
-    await logEvent(env, request, session, "plusone.add", "post", postId, { rider: post.author_name });
+    // Rider posts have no capacity to run out of, so a party size here is
+    // just a more accurate count of who's going that way.
+    if (existing) {
+      await env.DB.prepare(
+        `UPDATE plus_ones SET party_size = ? WHERE post_id = ? AND author_email = ?`
+      )
+        .bind(party, postId, session.email)
+        .run();
+    } else {
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO plus_ones (post_id, author_email, author_name, party_size, created_at)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+        .bind(postId, session.email, session.name, party, Date.now())
+        .run();
+    }
+    await logEvent(env, request, session, "plusone.add", "post", postId, { rider: post.author_name, party });
   }
 
   return json({ posts: await loadBoard(env, session) }, 200, request, env);

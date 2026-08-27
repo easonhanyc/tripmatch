@@ -11,3 +11,6 @@ worker/seed.sql.bak
 
 # macOS
 .DS_Store
+
+# Database exports (see DEPLOY.md - keep these outside the repo)
+backup-*.sql

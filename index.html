@@ -791,6 +791,71 @@
   }
   .how-foot button:hover { background: var(--blue-deep); }
 
+
+  /* ------------------------------------------------- party size ("+N") -- */
+
+  /* The inline "how many of you?" bar. Same visual language as the delete
+     confirmation — an inline question attached to the row it concerns,
+     rather than a modal that hides the trip you're deciding about. */
+  .row-party {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: #fff8e6;
+    border-top: 1px solid var(--gold-deep);
+    font-size: 13px;
+    color: #6b4a06;
+  }
+  .row-party > span:first-child { flex: 1 1 100%; font-weight: 600; }
+  .party-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .party-opt, .party-cancel {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 7px 13px;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    border: 1px solid var(--gold-deep);
+    background: #fff;
+    color: var(--gold-deep);
+  }
+  .party-opt:hover { background: var(--gold-deep); color: #fff; }
+  .party-opt.current { background: var(--gold-deep); color: #fff; }
+  .party-cancel { border-color: var(--line); background: transparent; color: var(--ink-soft); }
+  .party-hint {
+    flex: 1 1 100%;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    opacity: 0.8;
+  }
+
+  .party-change {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    padding: 5px 8px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .party-change:hover { border-color: var(--gold-deep); color: var(--gold-deep); }
+
+  /* The "+1" beside a name in the roster — someone travelling with them who
+     isn't on TripMatch. */
+  .guest-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 600;
+    background: rgba(200, 137, 10, 0.16);
+    border-radius: 4px;
+    padding: 0 4px;
+  }
+
   .other-city { margin-top: 8px; }
   .hidden { display: none !important; }
 </style>
@@ -840,7 +905,7 @@
       </div>
       <div class="header-top-row">
         <button type="button" class="contact-link linkish" id="howLink">How it works</button>
-        <a class="contact-link" href="mailto:eason_han@berkeley.edu">Bug or issue? Email eason_han@berkeley.edu</a>
+        <a class="contact-link" href="mailto:eason_han@berkeley.edu">Bug or issue? Email eason_han@berkeley.edu or DM</a>
       </div>
       <h1 class="wordmark">TripMatch</h1>
       <p class="tagline">Post a trip, see who else is going your way. No more scrolling the group chat.</p>
@@ -1219,7 +1284,8 @@
   // loaded: has a board fetch ever succeeded? The empty state must not claim
   // "nothing posted yet" when the truth is "we couldn't ask" — that reads as
   // an empty board and sends people off to post a duplicate.
-  var state = { posts: [], loaded: false, filter: null, dateFilter: null, expanded: {}, confirmingDelete: {} };
+  var state = { posts: [], loaded: false, filter: null, dateFilter: null,
+                expanded: {}, confirmingDelete: {}, partyPrompt: {} };
 
   // Identity is the verified session, not a remembered string. Everywhere
   // that used to read state.me now reads this, so there is exactly one
@@ -1422,8 +1488,13 @@
     // On a driver's post the hand-raisers are people taking seats, and the
     // list is capped. On a rider's post it stays an uncapped "me too".
     var isSeatClaim = p.role === "driver";
-    var seatsLeft = isSeatClaim ? Math.max(0, p.seats - plusOnes.length) : 0;
+    // seatsTaken is a sum of party sizes, not a headcount of claims — one
+    // person may be bringing someone who isn't on TripMatch.
+    var seatsLeft = isSeatClaim ? Math.max(0, p.seats - (p.seatsTaken || 0)) : 0;
     var full = isSeatClaim && seatsLeft === 0;
+    var myParty = 0;
+    plusOnes.forEach(function (po) { if (po.mine) myParty = po.party || 1; });
+    var partyPrompting = !!state.partyPrompt[p.id];
     var html = '<div class="row' + (isOwner ? ' is-mine' : '') + '" data-post-id="' + p.id + '">';
 
     html += '<div class="row-summary">';
@@ -1438,13 +1509,20 @@
         ? '<span class="badge full">Full · ' + p.seats + ' seat' + (p.seats == 1 ? "" : "s") + ' taken</span>'
         : '<span class="badge driver">Offering · ' + seatsLeft + ' of ' + p.seats + ' seat' + (p.seats == 1 ? "" : "s") + ' left</span>';
     } else {
-      html += '<span class="badge rider">Needs a ride</span>';
+      html += '<span class="badge rider">' +
+        ((p.partySize || 1) > 1 ? 'Needs ' + p.partySize + ' seats' : 'Needs a ride') + '</span>';
     }
     html += '</div>';
     html += '<div class="cities">' + escapeHtml(p.originCity) + ' → ' + escapeHtml(p.destCity) + '</div>';
     if (p.notes) html += '<div class="notes">' + escapeHtml(p.notes) + '</div>';
     if (plusOnes.length) {
-      var names = plusOnes.map(function (po) { return escapeHtml(po.name); }).join(', ');
+      // "Alice Chen +1" — the +1 being someone travelling with Alice who
+      // isn't on TripMatch. Without it a driver can't tell three claims from
+      // five passengers.
+      var names = plusOnes.map(function (po) {
+        var extra = (po.party || 1) - 1;
+        return escapeHtml(po.name) + (extra > 0 ? ' <span class="guest-tag">+' + extra + '</span>' : '');
+      }).join(', ');
       html += isSeatClaim
         ? '<div class="plusones-line">Riding along: ' + names + '</div>'
         : '<div class="plusones-line">Also going: ' + names + '</div>';
@@ -1457,8 +1535,8 @@
     if (isSeatClaim) {
       if (joined) {
         btnClass += ' joined';
-        btnLabel = '✓ Seat taken';
-        btnTitle = 'You have a seat on this trip — tap to give it back.';
+        btnLabel = myParty > 1 ? '✓ ' + myParty + ' seats' : '✓ Seat taken';
+        btnTitle = 'You have ' + (myParty > 1 ? myParty + ' seats' : 'a seat') + ' on this trip — tap to give ' + (myParty > 1 ? 'them' : 'it') + ' back.';
       } else if (full) {
         btnClass += ' is-full';
         btnLabel = 'Full';
@@ -1471,7 +1549,10 @@
       }
     } else {
       btnClass += joined ? ' joined' : (plusOnes.length ? ' has-plusones' : '');
-      btnLabel = (joined ? '✓ ' : '') + '+1 · ' + plusOnes.length;
+      // The count is people, not claims, so a "+1 · 3" can be two accounts
+      // where one is bringing a guest.
+      var goingCount = plusOnes.reduce(function (n, po) { return n + (po.party || 1); }, 0);
+      btnLabel = (joined ? '✓ ' : '') + '+1 · ' + goingCount;
       btnTitle = plusOnes.length
         ? plusOnes.map(function (po) { return po.name; }).join(', ')
         : 'Going the same way? Count yourself in.';
@@ -1481,6 +1562,17 @@
 
     html += '<button type="button" class="' + btnClass + '" data-id="' + p.id + '"' +
       (btnDisabled ? ' disabled' : '') + ' title="' + escapeHtml(btnTitle) + '">' + btnLabel + '</button>';
+
+    // Once aboard, the main button leaves the trip. Changing how many people
+    // you're bringing needs its own control, or the only way to correct it
+    // would be to drop out and re-claim — and risk losing the seat.
+    if (joined && !isOwner) {
+      var canVary = isSeatClaim ? (seatsLeft + myParty) > 1 : true;
+      if (canVary) {
+        html += '<button type="button" class="party-change" data-id="' + p.id +
+          '" title="Change how many of you are coming">＋ / －</button>';
+      }
+    }
     html += '<button class="comment-btn' + (comments.length ? ' has-comments' : '') + '" data-id="' + p.id + '">💬 ' + comments.length + '</button>';
     if (canManage) {
       var adminMark = managingOther ? ' title="Admin action on someone else\'s post — this is recorded in the activity log"' : '';
@@ -1500,6 +1592,28 @@
       html += '<button type="button" class="btn-confirm-delete" data-id="' + p.id + '">Yes, delete</button>';
       html += '</div>';
       html += '<div class="delete-err err hidden"></div>';
+      html += '</div>';
+    }
+
+    // Asked only when there is actually a decision to make: if a driver has
+    // exactly one seat left there is nothing to choose, so the claim goes
+    // straight through. Anywhere else, being asked is what stops someone
+    // quietly arriving with a passenger the driver didn't plan for.
+    if (partyPrompting) {
+      var maxParty = isSeatClaim ? Math.min(4, seatsLeft + myParty) : 4;
+      html += '<div class="row-party">';
+      html += '<span>' + (isSeatClaim ? 'How many seats do you need?' : 'How many of you are going?') + '</span>';
+      html += '<div class="party-opts">';
+      for (var pi = 1; pi <= maxParty; pi++) {
+        var label = pi === 1 ? 'Just me' : 'Me +' + (pi - 1);
+        html += '<button type="button" class="party-opt' + (myParty === pi ? ' current' : '') +
+          '" data-id="' + p.id + '" data-party="' + pi + '">' + label + '</button>';
+      }
+      html += '<button type="button" class="party-cancel" data-id="' + p.id + '">Cancel</button>';
+      html += '</div>';
+      if (isSeatClaim) {
+        html += '<span class="party-hint">' + seatsLeft + ' seat' + (seatsLeft === 1 ? '' : 's') + ' free right now</span>';
+      }
       html += '</div>';
     }
 
@@ -1648,8 +1762,10 @@
 
     // What a rider scanning the board actually wants to know: is there a seat
     // anywhere? Counted across visible posts so it respects the filters.
+    // seatsTaken, not plusOnes.length: a single claim can cover two people,
+    // so counting rows here reports seats that don't exist.
     var seatsFree = visiblePosts.reduce(function (n, p) {
-      return p.role === "driver" ? n + Math.max(0, p.seats - (p.plusOnes || []).length) : n;
+      return p.role === "driver" ? n + Math.max(0, p.seats - (p.seatsTaken || 0)) : n;
     }, 0);
     if (seatsFree > 0) metaText += " · " + seatsFree + " seat" + (seatsFree === 1 ? "" : "s") + " free";
     if (hasFilter) {
@@ -1687,38 +1803,79 @@
       el.classList.remove("hidden");
     }
 
-    // +1 is a lightweight "count me in too" — no separate post, just your
-    // name added to (or removed from) the trip's interest list. It no longer
-    // needs to ask who you are: the server knows, and it toggles a single
-    // row rather than rewriting a shared list, so two people +1'ing the same
-    // trip at the same instant can't overwrite each other.
-    Array.prototype.forEach.call(document.querySelectorAll(".plusone-btn"), function (btn) {
-      btn.addEventListener("click", async function () {
-        var id = btn.getAttribute("data-id");
-        var original = btn.textContent;
-        btn.disabled = true;
+    // Joining a trip. Sends `party` — how many people the claim covers —
+    // because one account often speaks for two, and counting them as one is
+    // how a driver ends up with more passengers than seats.
+    async function join(id, party, btn) {
+      if (btn) btn.disabled = true;
 
-        var res = await api("/api/posts/" + id + "/plusone", { method: "POST" });
+      var res = await api("/api/posts/" + id + "/plusone", {
+        method: "POST",
+        body: party === undefined ? {} : { party: party },
+      });
 
-        if (!res.ok) {
-          btn.disabled = false;
-          // The banner already covers transport and auth failures; only the
-          // post-specific ones need to be said here.
-          if (res.code === "NOT_FOUND" || res.code === "FORBIDDEN" ||
-              res.code === "INVALID" || res.code === "SEATS_FULL") {
-            // SEATS_FULL means someone took the last seat between this page
-            // rendering and the tap landing. Say so, and refresh so the
-            // button they're looking at stops offering a seat that's gone.
-            rowError(id, res.message);
-            if (res.code === "SEATS_FULL") refresh();
-          } else {
-            btn.textContent = "Try again";
-            setTimeout(function () { if (btn.isConnected) btn.textContent = original; }, 1600);
-          }
-          return;
+      if (!res.ok) {
+        if (btn) btn.disabled = false;
+        if (res.code === "NOT_FOUND" || res.code === "FORBIDDEN" ||
+            res.code === "INVALID" || res.code === "SEATS_FULL") {
+          rowError(id, res.message);
+          // Someone took the seats between this page rendering and the tap
+          // landing — reload so the button stops offering what's gone.
+          if (res.code === "SEATS_FULL") refresh();
+        } else if (btn) {
+          var original = btn.textContent;
+          btn.textContent = "Try again";
+          setTimeout(function () { if (btn.isConnected) btn.textContent = original; }, 1600);
         }
+        return;
+      }
 
-        applyBoard(res.data.posts);
+      delete state.partyPrompt[id];
+      applyBoard(res.data.posts);
+      render();
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll(".plusone-btn"), function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-id");
+        var post = state.posts.find(function (x) { return String(x.id) === id; });
+        if (!post) return;
+
+        var mine = (post.plusOnes || []).find(function (o) { return o.mine; });
+
+        // Already aboard: tapping leaves. Changing party size is done from
+        // the prompt, which the "change" control opens.
+        if (mine) return join(id, undefined, btn);
+
+        var free = post.role === "driver"
+          ? Math.max(0, post.seats - (post.seatsTaken || 0))
+          : 4;
+
+        // Nothing to decide when only one seat is left — don't make them tap
+        // through a question with a single answer.
+        if (post.role === "driver" && free <= 1) return join(id, 1, btn);
+
+        state.partyPrompt[id] = true;
+        render();
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".party-opt"), function (btn) {
+      btn.addEventListener("click", function () {
+        join(btn.getAttribute("data-id"), parseInt(btn.getAttribute("data-party"), 10), btn);
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".party-cancel"), function (btn) {
+      btn.addEventListener("click", function () {
+        delete state.partyPrompt[btn.getAttribute("data-id")];
+        render();
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".party-change"), function (btn) {
+      btn.addEventListener("click", function () {
+        state.partyPrompt[btn.getAttribute("data-id")] = true;
         render();
       });
     });
@@ -1873,7 +2030,24 @@
       '<div class="role-opt rider" data-role="rider">Need a ride</div>' +
       '</div>' +
       '<div id="seatsWrap" class="hidden">' +
-      '<label>Seats available<input type="number" id="f_seats" min="1" max="8" value="2"></label>' +
+      '<label>Seats available' +
+      '<input type="number" id="f_seats" min="1" max="8" value="2">' +
+      '<span class="hint">Places free for other people — don\'t count yourself, or anyone already coming with you.</span>' +
+      '</label>' +
+      '</div>' +
+
+      // Riders can be travelling as a pair. Without this a driver sees one
+      // name, plans for one person, and finds two at the kerb.
+      '<div id="partyWrap" class="hidden">' +
+      '<label>How many need a ride?' +
+      '<select id="f_party">' +
+      '<option value="1">Just me</option>' +
+      '<option value="2">Me + 1 other</option>' +
+      '<option value="3">Me + 2 others</option>' +
+      '<option value="4">Me + 3 others</option>' +
+      '</select>' +
+      '<span class="hint">Include anyone coming with you, even if they\'re not on TripMatch.</span>' +
+      '</label>' +
       '</div>' +
 
       '<div class="two-col">' +
@@ -1920,6 +2094,7 @@
         o.classList.toggle("active", o.getAttribute("data-role") === r);
       });
       backdrop.querySelector("#seatsWrap").classList.toggle("hidden", role !== "driver");
+      backdrop.querySelector("#partyWrap").classList.toggle("hidden", role !== "rider");
     }
     Array.prototype.forEach.call(backdrop.querySelectorAll(".role-opt"), function (opt) {
       opt.addEventListener("click", function () { setRole(opt.getAttribute("data-role")); });
@@ -1939,6 +2114,7 @@
     if (isEdit) {
       setRole(editPost.role);
       if (editPost.role === "driver") backdrop.querySelector("#f_seats").value = editPost.seats;
+      if (editPost.role === "rider") backdrop.querySelector("#f_party").value = String(editPost.partySize || 1);
       setCity(originSel, "#originOtherWrap", "#f_originOther", editPost.originCity);
       setCity(destSel, "#destOtherWrap", "#f_destOther", editPost.destCity);
       dateInput.value = editPost.date;
@@ -1997,6 +2173,7 @@
       var fields = {
         role: role,
         seats: seats,
+        partySize: role === "rider" ? parseInt(backdrop.querySelector("#f_party").value, 10) || 1 : 1,
         date: date,
         time: time,
         notes: notes,
