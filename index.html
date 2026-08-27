@@ -258,55 +258,34 @@
   .plusone-btn.joined { background: #fff8e6; color: var(--gold-deep); border-color: var(--gold-deep); }
   .plusone-btn:disabled { opacity: 0.6; cursor: default; }
 
-  .row-plusone-prompt {
+  /* Per-row error slot: failures that are about one specific post, shown
+     next to it rather than in the global banner up top. */
+  .row-err {
+    margin: 0;
+    padding: 8px 14px 10px;
+    background: #fdeceb;
+    border-top: 1px solid #f0b4ae;
+  }
+
+  /* Who a post will be attributed to. Read-only on purpose — the name comes
+     from the verified Berkeley account, not from a field anyone can type. */
+  .posting-as {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
-    padding: 10px 14px;
-    background: #fff8e6;
-    border-top: 1px solid var(--gold-deep);
-    font-size: 13px;
-    color: #6b4a06;
-  }
-  .row-plusone-prompt > span { flex: 1 1 100%; }
-  .plusone-form { display: flex; gap: 8px; flex: 1 1 100%; flex-wrap: wrap; }
-  .plusone-name-input {
-    flex: 1;
-    min-width: 120px;
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 13.5px;
-    padding: 7px 9px;
+    flex-wrap: wrap;
+    padding: 9px 11px;
+    margin-top: 4px;
+    background: var(--paper);
     border: 1px solid var(--line);
-    border-radius: 7px;
-    background: #fff;
-    color: var(--ink);
+    border-radius: 8px;
   }
-  .plusone-form button[type="submit"] {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 600;
-    font-size: 12.5px;
-    padding: 7px 12px;
-    border-radius: 7px;
-    border: none;
-    background: var(--gold-deep);
-    color: #fff;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .btn-cancel-plusone {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 600;
-    font-size: 12.5px;
-    padding: 7px 12px;
-    border-radius: 7px;
-    border: 1px solid var(--line);
-    background: transparent;
+  .posting-as strong { font-size: 14px; }
+  .posting-as span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
     color: var(--ink-soft);
-    cursor: pointer;
-    white-space: nowrap;
   }
-  .row-plusone-prompt .plusone-err { width: 100%; margin: 0; }
 
   .delete-btn {
     font-family: 'IBM Plex Mono', monospace;
@@ -409,22 +388,6 @@
   .notes { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; font-style: italic; }
   .plusones-line { font-size: 12.5px; color: var(--gold-deep); margin-top: 4px; font-weight: 600; }
 
-  .setup-banner {
-    background: #fff3cd;
-    border: 1px solid #e8c468;
-    color: #6b4a06;
-    font-size: 13px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    margin-bottom: 14px;
-  }
-  .setup-banner code {
-    background: rgba(0,0,0,0.08);
-    padding: 1px 5px;
-    border-radius: 4px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
-  }
 
   .empty {
     text-align: center;
@@ -567,17 +530,188 @@
   .btn-primary:hover { background: var(--blue-deep); }
   .btn-secondary { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
 
+
+  /* ---------------------------------------------------- status banner ----
+     One banner, four states, always in the same place at the top of the
+     board. It exists because the previous build failed silently: a dropped
+     request left a spinner or a stale board with no explanation, and the
+     only signal was a red line inside whichever form you happened to be
+     using. Anything that stops TripMatch from reaching its backend now says
+     so once, loudly, with the one action that might fix it. */
+
+  .status-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    border: 1px solid;
+  }
+  .status-banner .sb-icon { flex: none; font-size: 15px; line-height: 1.4; }
+  .status-banner .sb-body { flex: 1; min-width: 0; }
+  .status-banner .sb-title { font-weight: 600; }
+  .status-banner .sb-detail { margin-top: 2px; opacity: 0.85; }
+  .status-banner .sb-action {
+    flex: none;
+    border: 1px solid currentColor;
+    background: transparent;
+    color: inherit;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .status-banner .sb-action:hover { background: rgba(0,0,0,0.06); }
+  .status-banner .sb-action[disabled] { opacity: 0.55; cursor: default; }
+
+  .status-banner.error   { background: #fdeceb; border-color: #f0b4ae; color: #8c1d18; }
+  .status-banner.warn    { background: #fff6e0; border-color: #e8cd8a; color: #6b4c05; }
+  .status-banner.info    { background: #e9f1f8; border-color: #b6cee2; color: #1c4a72; }
+  .status-banner.success { background: #e7f4ed; border-color: #a8d4bd; color: #1c5238; }
+
+  /* A dot in the header that turns amber the moment a request fails, so the
+     board itself carries the state even after the banner is dismissed. */
+  .conn-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #6bbf8a;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .conn-dot.degraded { background: var(--gold); }
+  .conn-dot.down { background: #e5796d; }
+
+  /* -------------------------------------------------------- auth gate ---- */
+
+  .auth-gate {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    background: var(--paper);
+  }
+  .auth-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    max-width: 420px;
+    width: 100%;
+    overflow: hidden;
+    box-shadow: 0 2px 20px rgba(0, 48, 87, 0.07);
+  }
+  .auth-head {
+    background: var(--blue);
+    border-bottom: 5px solid var(--gold);
+    color: #fff;
+    padding: 26px 24px 22px;
+  }
+  .auth-head .eyebrow { margin: 0 0 4px; font-size: 11.5px; letter-spacing: 0.09em; text-transform: uppercase; opacity: 0.75; }
+  .auth-head h1 { margin: 0; font-size: 30px; letter-spacing: -0.02em; }
+  .auth-head p { margin: 8px 0 0; font-size: 13.5px; opacity: 0.9; line-height: 1.5; }
+  .auth-body { padding: 24px; }
+  .auth-body h2 { margin: 0 0 6px; font-size: 15.5px; }
+  .auth-body .why { margin: 0 0 18px; font-size: 13px; color: var(--ink-soft); line-height: 1.55; }
+  .auth-btn-wrap { display: flex; justify-content: center; min-height: 44px; }
+  .auth-fallback { margin-top: 14px; font-size: 12.5px; color: var(--ink-soft); text-align: center; line-height: 1.5; }
+  .auth-err {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #fdeceb;
+    border: 1px solid #f0b4ae;
+    color: #8c1d18;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .auth-foot {
+    border-top: 1px solid var(--line-soft);
+    padding: 14px 24px;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    line-height: 1.55;
+  }
+
+  /* ----------------------------------------------------- identity chip --- */
+
+  .identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: rgba(255,255,255,0.9);
+  }
+  .identity .who { font-weight: 600; }
+  .identity .signout {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.35);
+    color: rgba(255,255,255,0.9);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 11.5px;
+    padding: 3px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .identity .signout:hover { background: rgba(255,255,255,0.12); }
+
+  /* A post you own gets a faint gold edge, so "mine" reads at a glance now
+     that ownership is a real verified identity rather than a name guess. */
+  .row.is-mine { box-shadow: inset 2px 0 0 var(--gold); }
+
   .other-city { margin-top: 8px; }
   .hidden { display: none !important; }
 </style>
 </head>
 <body>
-<div id="app">
+
+<!-- The gate is the whole page until a Berkeley account is verified. It
+     renders first and #app stays hidden, so the board is never briefly
+     visible to someone who hasn't signed in. -->
+<div id="authGate" class="auth-gate hidden">
+  <div class="auth-card">
+    <div class="auth-head">
+      <p class="eyebrow">Haas · rides board</p>
+      <h1>TripMatch</h1>
+      <p>Post a trip, see who else is going your way. No more scrolling the group chat.</p>
+    </div>
+    <div class="auth-body">
+      <h2>Sign in with your Berkeley account</h2>
+      <p class="why">
+        TripMatch is limited to <strong>@berkeley.edu</strong> accounts, so everyone on the board
+        is a verified member of the community. Signing in also means your posts stay yours —
+        you can edit or delete them from any device, not just the one you posted from.
+      </p>
+      <div class="auth-btn-wrap" id="gsiButton"></div>
+      <div class="auth-fallback" id="authFallback">Loading Google sign-in…</div>
+      <div class="auth-err hidden" id="authErr"></div>
+    </div>
+    <div class="auth-foot">
+      We receive only your name and Berkeley email address from Google — nothing else, and no password.
+      Your name and email appear on posts you make so classmates know who to reach out to.
+    </div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
   <header class="top">
     <div class="wrap">
       <div class="header-top-row">
         <p class="eyebrow">Haas · rides board</p>
+        <div class="identity">
+          <span class="conn-dot" id="connDot" title="Connected"></span>
+          <span class="who" id="whoAmI"></span>
+          <button type="button" class="signout" id="signOutBtn">Sign out</button>
+        </div>
+      </div>
+      <div class="header-top-row">
         <a class="contact-link" href="mailto:eason_han@berkeley.edu">Bug or issue? Email eason_han@berkeley.edu</a>
+        <a class="contact-link hidden" id="logsLink" href="logs.html">Activity log</a>
       </div>
       <h1 class="wordmark">TripMatch</h1>
       <p class="tagline">Post a trip, see who else is going your way. No more scrolling the group chat.</p>
@@ -586,10 +720,7 @@
   </header>
 
   <main class="wrap">
-    <div id="setupBanner" class="setup-banner hidden">
-      This board isn't connected to a backend yet — open index.html and fill in
-      <code>JSONBIN_BIN_ID</code> / <code>JSONBIN_KEY</code> near the top of the script.
-    </div>
+    <div id="statusBanner" class="status-banner hidden" role="status" aria-live="polite"></div>
     <div class="date-chips hidden" id="dateChips"></div>
     <div class="board-header">
       <h2>Open trips</h2>
@@ -601,27 +732,248 @@
   <button class="fab" id="openFab">+ Post a trip</button>
 </div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 (function () {
   "use strict";
 
-  var ME_KEY = "tripmatch-me";
+  // ---- configuration -------------------------------------------------
+  //
+  // Neither of these is a secret, and that is the point. The previous build
+  // shipped a JSONBin master key in this file, which meant anyone who opened
+  // View Source could rewrite or wipe the whole board. All credentials now
+  // live in the Cloudflare Worker; the browser holds an OAuth client ID
+  // (which only names the app) and a URL.
 
-  // ---- shared board backend (jsonbin.io) ----
-  // 1. Create a free account at https://jsonbin.io
-  // 2. Create a bin with initial content: []
-  // 3. Copy its Bin ID into JSONBIN_BIN_ID below.
-  // 4. Get a key: either your account's X-Master-Key, or (safer, since this
-  //    key is visible to anyone who views this page's source) an Access Key
-  //    scoped to just this one bin with Read+Update permission — if you use
-  //    a scoped Access Key, change JSONBIN_AUTH_HEADER to "X-Access-Key".
-  var JSONBIN_BIN_ID = "6a8a4416f5f4af5e2936f5b2";
-  var JSONBIN_KEY = "$2a$10$LAmSUbxwqH2kQaDkvQwggOaXrVgc4GmOWTi1TnADdjx6EZ6bmsu4u";
-  var JSONBIN_AUTH_HEADER = "X-Master-Key";
-  var JSONBIN_BASE = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
+  var API_BASE = "https://tripmatch-api.tripmatch-app.workers.dev";
+  var GOOGLE_CLIENT_ID = "463078890652-qm9j13cicdrla2rlguqg847e4aru2umr.apps.googleusercontent.com";
+  var ALLOWED_DOMAIN = "berkeley.edu";
 
-  function backendConfigured() {
-    return JSONBIN_BIN_ID.indexOf("REPLACE_WITH") !== 0 && JSONBIN_KEY.indexOf("REPLACE_WITH") !== 0;
+  var TOKEN_KEY = "tripmatch-session";
+  var USER_KEY = "tripmatch-user";
+
+  function configured() {
+    return API_BASE.indexOf("REPLACE_WITH") === -1 && GOOGLE_CLIENT_ID.indexOf("REPLACE_WITH") === -1;
+  }
+
+  // ---- status banner ---------------------------------------------------
+  //
+  // Every failure the app can hit surfaces here, in one place, in the same
+  // words each time. `show` is idempotent, so a retry loop repainting the
+  // same state doesn't flicker; `clear` only clears if the banner is still
+  // showing the state the caller put up, so a slow success can't wipe a
+  // newer, more serious error.
+
+  var banner = (function () {
+    var el = null;
+    var current = null;
+
+    function node() {
+      if (!el) el = document.getElementById("statusBanner");
+      return el;
+    }
+
+    function paint(state) {
+      var n = node();
+      if (!n) return;
+      var html = '<span class="sb-icon">' + state.icon + "</span>";
+      html += '<div class="sb-body"><div class="sb-title">' + escapeHtml(state.title) + "</div>";
+      if (state.detail) html += '<div class="sb-detail">' + escapeHtml(state.detail) + "</div>";
+      html += "</div>";
+      if (state.action) html += '<button type="button" class="sb-action">' + escapeHtml(state.action) + "</button>";
+      n.className = "status-banner " + state.tone;
+      n.innerHTML = html;
+
+      var btn = n.querySelector(".sb-action");
+      if (btn && state.onAction) {
+        btn.addEventListener("click", function () {
+          btn.disabled = true;
+          btn.textContent = "Working…";
+          Promise.resolve(state.onAction()).catch(function () {}).then(function () {
+            if (btn.isConnected) { btn.disabled = false; btn.textContent = state.action; }
+          });
+        });
+      }
+      setConnDot(state.tone === "error" ? "down" : state.tone === "warn" ? "degraded" : "ok");
+    }
+
+    function setConnDot(kind) {
+      var dot = document.getElementById("connDot");
+      if (!dot) return;
+      dot.className = "conn-dot" + (kind === "ok" ? "" : " " + kind);
+      dot.title = kind === "ok" ? "Connected" : kind === "degraded" ? "Having trouble reaching TripMatch" : "Can't reach TripMatch";
+    }
+
+    return {
+      show: function (key, state) {
+        if (current === key) return;
+        current = key;
+        paint(state);
+      },
+      clear: function (key) {
+        // Only the state that raised the banner may lower it.
+        if (key && current !== key) return;
+        current = null;
+        var n = node();
+        if (n) { n.className = "status-banner hidden"; n.innerHTML = ""; }
+        setConnDot("ok");
+      },
+      currentKey: function () { return current; }
+    };
+  })();
+
+  // Named, reusable failure states. Keeping the copy here rather than at each
+  // call site is what keeps "we couldn't reach the server" from being worded
+  // five different ways in five different places.
+  var BANNERS = {
+    unconfigured: {
+      tone: "error", icon: "⚙️",
+      title: "TripMatch isn't connected to its backend yet.",
+      detail: "Set API_BASE and GOOGLE_CLIENT_ID near the top of index.html. Until then, nothing can be posted or loaded."
+    },
+    offline: {
+      tone: "warn", icon: "📡",
+      title: "You're offline.",
+      detail: "The board below may be out of date, and nothing you post will save until you're back on a network."
+    },
+    unreachable: {
+      tone: "error", icon: "⚠️",
+      title: "Can't reach TripMatch right now.",
+      detail: "Your connection is fine, so this is on our end. The board below may be out of date and posting is paused.",
+      action: "Retry"
+    },
+    server: {
+      tone: "error", icon: "⚠️",
+      title: "TripMatch hit an error and couldn't complete that.",
+      detail: "Nothing was saved. Try again in a moment — if it keeps happening, email eason_han@berkeley.edu.",
+      action: "Retry"
+    },
+    rateLimited: {
+      tone: "warn", icon: "🐢",
+      title: "That's a lot of activity at once.",
+      detail: "Posting is paused for about a minute, then it'll work again. Nothing you've already posted was lost."
+    },
+    expired: {
+      tone: "info", icon: "🔑",
+      title: "Your sign-in expired.",
+      detail: "The trips below are still the ones we last loaded. Sign in again with your Berkeley account to post, comment or +1.",
+      action: "Sign in"
+    }
+  };
+
+  function showBanner(key, overrides) {
+    var base = BANNERS[key];
+    if (!base) return;
+    var state = {};
+    for (var k in base) state[k] = base[k];
+    for (var j in (overrides || {})) state[j] = overrides[j];
+    banner.show(key, state);
+  }
+
+  // ---- session ---------------------------------------------------------
+
+  var session = { token: null, user: null };
+
+  function loadSession() {
+    try {
+      var t = localStorage.getItem(TOKEN_KEY);
+      var u = localStorage.getItem(USER_KEY);
+      if (t && u) { session.token = t; session.user = JSON.parse(u); return true; }
+    } catch (e) {}
+    return false;
+  }
+
+  function storeSession(token, user) {
+    session.token = token;
+    session.user = user;
+    try {
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+    } catch (e) {}
+  }
+
+  function clearSession() {
+    session.token = null;
+    session.user = null;
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+    } catch (e) {}
+  }
+
+  // ---- API client ------------------------------------------------------
+  //
+  // Returns { ok, data } or { ok: false, code, message }. Every caller gets
+  // the same shape, and transport-level problems (offline, DNS, 5xx) raise
+  // the shared banner here rather than at each call site. Problems that are
+  // specific to what the user just did — a 400, a 403, a 404 — are returned
+  // for the caller to render inline next to the control they used, because
+  // a global banner is the wrong place for "you can only edit your own posts."
+
+  async function api(path, options) {
+    options = options || {};
+    if (!configured()) {
+      showBanner("unconfigured");
+      return { ok: false, code: "UNCONFIGURED", message: "TripMatch isn't connected to its backend yet." };
+    }
+    if (navigator.onLine === false) {
+      showBanner("offline");
+      return { ok: false, code: "OFFLINE", message: "You're offline." };
+    }
+
+    var headers = {};
+    if (options.body) headers["Content-Type"] = "application/json";
+    if (session.token) headers["Authorization"] = "Bearer " + session.token;
+
+    var res;
+    try {
+      res = await fetch(API_BASE + path, {
+        method: options.method || "GET",
+        headers: headers,
+        body: options.body ? JSON.stringify(options.body) : undefined,
+        cache: "no-store"
+      });
+    } catch (e) {
+      // fetch only rejects on transport failure, so this is genuinely "the
+      // request never landed" — distinct from a server that answered badly.
+      console.error("TripMatch: request failed", path, e);
+      showBanner(navigator.onLine === false ? "offline" : "unreachable", { onAction: options.retry || refresh });
+      return { ok: false, code: "UNREACHABLE", message: "Can't reach TripMatch right now." };
+    }
+
+    var data = null;
+    try { data = await res.json(); } catch (e) {}
+
+    if (res.ok) {
+      // A success means the pipe is healthy: clear any transport banner, but
+      // leave an auth or rate-limit banner alone — those aren't about the pipe.
+      var key = banner.currentKey();
+      if (key === "unreachable" || key === "offline" || key === "server") banner.clear(key);
+      return { ok: true, data: data };
+    }
+
+    var code = (data && data.error && data.error.code) || "HTTP_" + res.status;
+    var message = (data && data.error && data.error.message) || "Something went wrong.";
+
+    if (res.status === 401) {
+      // A 401 from the sign-in endpoint itself means "we rejected this
+      // credential" — a personal Google account, say. That is not a lapsed
+      // session, and telling the user their sign-in expired when they never
+      // had one would send them round a loop. Hand it back for the gate to
+      // explain, with its own code intact.
+      if (path === "/api/auth/session") return { ok: false, code: code, message: message };
+
+      clearSession();
+      showBanner("expired", { onAction: function () { showGate(); } });
+      return { ok: false, code: "UNAUTHENTICATED", message: message };
+    }
+    if (res.status === 429) { showBanner("rateLimited"); return { ok: false, code: "RATE_LIMITED", message: message }; }
+    if (res.status >= 500) {
+      showBanner("server", { onAction: options.retry || refresh });
+      return { ok: false, code: "SERVER_ERROR", message: message };
+    }
+
+    return { ok: false, code: code, message: message };
   }
 
   var CITIES_BY_REGION = {
@@ -684,15 +1036,6 @@
     });
   }
 
-  // Ownership is a name match, not a login (see PRD non-goals) — but the
-  // original exact-string check meant "Eason" and "eason " (a trailing space
-  // or different casing typed on another visit) silently locked someone out
-  // of editing their own old posts. Trim + case-fold so that friction is
-  // gone; it's still just a good-faith match, not real auth.
-  function namesMatch(a, b) {
-    return !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
-  }
-
   function todayISO() {
     var d = new Date();
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
@@ -717,56 +1060,25 @@
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + ", " + hh + ":" + mm;
   }
 
-  // ---------- storage ----------
+  // ---------- board data ----------
+  //
+  // The board is server-authoritative now. Every mutation endpoint returns
+  // the full refreshed board in its response, so a successful post/edit/
+  // delete/comment/+1 also picks up whatever else changed while the user was
+  // typing — one round trip instead of the old write-then-reread pair, and
+  // no window where the screen disagrees with the database.
 
-  async function loadPosts() {
-    if (!backendConfigured()) return [];
-    try {
-      var headers = {};
-      headers[JSONBIN_AUTH_HEADER] = JSONBIN_KEY;
-      var res = await fetch(JSONBIN_BASE + "/latest", { headers: headers, cache: "no-store" });
-      if (!res.ok) return [];
-      var data = await res.json();
-      var arr = data && data.record && data.record.posts;
-      return Array.isArray(arr) ? arr : [];
-    } catch (e) {
-      console.error("TripMatch: failed to load posts", e);
-      return [];
-    }
+  function applyBoard(posts) {
+    state.posts = Array.isArray(posts) ? posts : [];
+    state.loaded = true;
   }
 
-  // Returns { ok: true } or { ok: false, reason: "unconfigured"|"network"|"http" }
-  async function savePosts(posts) {
-    if (!backendConfigured()) return { ok: false, reason: "unconfigured" };
-    try {
-      var headers = { "Content-Type": "application/json" };
-      headers[JSONBIN_AUTH_HEADER] = JSONBIN_KEY;
-      var res = await fetch(JSONBIN_BASE, {
-        method: "PUT",
-        headers: headers,
-        body: JSON.stringify({ posts: posts })
-      });
-      if (!res.ok) return { ok: false, reason: "http" };
-      return { ok: true };
-    } catch (e) {
-      console.error("TripMatch: failed to save posts", e);
-      return { ok: false, reason: "network" };
-    }
-  }
-
-  // "Remembered identity" is intentionally per-device only (see PRD open
-  // questions) — plain localStorage, no shared backend involved.
-  function loadMe() {
-    try {
-      var v = localStorage.getItem(ME_KEY);
-      return v ? JSON.parse(v) : null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function saveMe(me) {
-    try { localStorage.setItem(ME_KEY, JSON.stringify(me)); } catch (e) {}
+  async function refresh() {
+    var res = await api("/api/board");
+    if (!res.ok) return false;
+    applyBoard(res.data.posts);
+    render();
+    return true;
   }
 
   // ---------- app state ----------
@@ -775,23 +1087,176 @@
   // expanded: postId -> true, tracks which posts have their comments open.
   // confirmingDelete: postId -> true, tracks which posts are showing the
   // "are you sure?" bar (the required second step before an actual delete).
-  var state = { posts: [], me: null, filter: null, dateFilter: null, expanded: {}, confirmingDelete: {}, plusOnePrompt: {} };
+  // loaded: has a board fetch ever succeeded? The empty state must not claim
+  // "nothing posted yet" when the truth is "we couldn't ask" — that reads as
+  // an empty board and sends people off to post a duplicate.
+  var state = { posts: [], loaded: false, filter: null, dateFilter: null, expanded: {}, confirmingDelete: {} };
+
+  // Identity is the verified session, not a remembered string. Everywhere
+  // that used to read state.me now reads this, so there is exactly one
+  // answer to "who is the viewer" and it can't be typed by hand.
+  function me() { return session.user; }
+
+  // Ownership is decided by the server and arrives as a flag on each post,
+  // rather than being re-derived here from an email the payload would
+  // otherwise have to carry. That keeps other people's addresses off the
+  // wire, and means the Edit button you can see and the edit the server will
+  // actually allow are answering the same question — including the legacy
+  // name-match fallback for posts made before sign-in existed.
+  function isMine(post) {
+    return !!post.mine;
+  }
+
+  // ---------- boot ----------
+
+  function showGate(errMessage) {
+    document.getElementById("app").classList.add("hidden");
+    var gate = document.getElementById("authGate");
+    gate.classList.remove("hidden");
+
+    var errEl = document.getElementById("authErr");
+    if (errMessage) {
+      errEl.textContent = errMessage;
+      errEl.classList.remove("hidden");
+    } else {
+      errEl.classList.add("hidden");
+    }
+    mountGoogleButton();
+  }
+
+  function showApp() {
+    document.getElementById("authGate").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    var u = me();
+    document.getElementById("whoAmI").textContent = u ? u.name : "";
+  }
+
+  // Google Identity Services loads async and may not be ready when we are.
+  // Poll briefly rather than racing it, and if it never arrives say so
+  // plainly instead of leaving an empty box where a button should be —
+  // a blocked or offline GIS script is the one failure that would otherwise
+  // lock every user out with no explanation.
+  var gsiTries = 0;
+  function mountGoogleButton() {
+    var target = document.getElementById("gsiButton");
+    var fallback = document.getElementById("authFallback");
+
+    if (!configured()) {
+      fallback.textContent = "This deployment isn't configured yet — API_BASE and GOOGLE_CLIENT_ID still need to be filled in near the top of index.html.";
+      return;
+    }
+
+    if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+      if (gsiTries++ > 40) {
+        fallback.innerHTML = "Google sign-in didn't load. Check that accounts.google.com isn't blocked on your network, then <a href=\"\" onclick=\"location.reload();return false;\">reload</a>.";
+        return;
+      }
+      setTimeout(mountGoogleButton, 150);
+      return;
+    }
+
+    if (target.childElementCount > 0) return; // already mounted
+
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: onGoogleCredential,
+      hd: ALLOWED_DOMAIN,          // asks Google to show only berkeley.edu accounts
+      auto_select: true,           // silently reuses a single known account
+      cancel_on_tap_outside: false
+    });
+    window.google.accounts.id.renderButton(target, {
+      theme: "outline", size: "large", text: "signin_with",
+      shape: "pill", logo_alignment: "left", width: 280
+    });
+    fallback.textContent = "Use your @" + ALLOWED_DOMAIN + " account — the same one as bMail.";
+  }
+
+  // The hd hint above is a convenience, not a control: it filters the account
+  // picker but a determined user can still submit a personal account. The
+  // Worker re-checks the domain against the signed `hd` claim before issuing
+  // a session, which is the check that actually matters.
+  async function onGoogleCredential(response) {
+    var fallback = document.getElementById("authFallback");
+    fallback.textContent = "Signing you in…";
+
+    var res = await api("/api/auth/session", { method: "POST", body: { credential: response.credential } });
+    if (!res.ok) {
+      fallback.textContent = "";
+      var msg = res.code === "WRONG_DOMAIN"
+        ? "That's not a @" + ALLOWED_DOMAIN + " account. TripMatch is limited to the Berkeley community — sign in with your Berkeley account."
+        : res.message || "Couldn't sign you in. Try again.";
+      // A rejected account shouldn't leave a silently auto-selected one in
+      // place, or the next attempt reuses it without showing the picker.
+      if (window.google && window.google.accounts) window.google.accounts.id.disableAutoSelect();
+      showGate(msg);
+      return;
+    }
+
+    storeSession(res.data.token, res.data.user);
+    banner.clear();
+    showApp();
+    await start();
+  }
+
+  function signOut() {
+    if (window.google && window.google.accounts) window.google.accounts.id.disableAutoSelect();
+    clearSession();
+    banner.clear();
+    state.posts = [];
+    showGate();
+  }
+
+  async function start() {
+    document.getElementById("board").innerHTML = '<div class="loading">Loading the board…</div>';
+
+    var res = await api("/api/board");
+    if (res.ok) {
+      applyBoard(res.data.posts);
+      render();
+    } else if (res.code === "UNAUTHENTICATED") {
+      // Stale token from a previous visit. There's nothing to keep on screen,
+      // so send them to the gate rather than to a banner over an empty board.
+      banner.clear();
+      showGate("Your last sign-in expired. Sign in again to see the board.");
+      return;
+    } else {
+      render(); // draw what we have, with the banner explaining why
+    }
+
+    var meRes = await api("/api/me");
+    if (meRes.ok && meRes.data.isAdmin) document.getElementById("logsLink").classList.remove("hidden");
+  }
 
   async function init() {
-    state.me = loadMe();
-    document.getElementById("setupBanner").classList.toggle("hidden", backendConfigured());
+    document.getElementById("signOutBtn").addEventListener("click", signOut);
 
-    var posts = await loadPosts();
-    var today = todayISO();
-    var active = posts.filter(function (p) { return p.date >= today; });
-    if (active.length !== posts.length) {
-      // Auto-cleanup: a static page has no server-side cron, so "automatic"
-      // means opportunistic — whoever's browser next loads the board past a
-      // trip's date scrubs it from shared storage for everyone.
-      await savePosts(active);
+    // Losing and regaining a network are the two most common failure states
+    // on a phone walking across campus, and both should resolve themselves
+    // without the user thinking about it.
+    window.addEventListener("offline", function () { showBanner("offline"); });
+    window.addEventListener("online", function () {
+      banner.clear("offline");
+      if (session.token) refresh();
+    });
+
+    // Coming back to a backgrounded tab is the other moment the board is
+    // most likely to be stale — someone else has almost certainly posted.
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden && session.token) refresh();
+    });
+
+    if (!configured()) {
+      showGate();
+      showBanner("unconfigured");
+      return;
     }
-    state.posts = active;
-    render();
+
+    if (loadSession()) {
+      showApp();
+      await start();
+    } else {
+      showGate();
+    }
   }
 
   function groupPosts(posts) {
@@ -818,11 +1283,10 @@
     var comments = p.comments || [];
     var plusOnes = p.plusOnes || [];
     var expanded = !!state.expanded[p.id];
-    var isOwner = namesMatch(state.me && state.me.name, p.name);
+    var isOwner = isMine(p);
     var confirming = !!state.confirmingDelete[p.id];
-    var plusOnePrompting = !!state.plusOnePrompt[p.id];
-    var joined = plusOnes.some(function (po) { return namesMatch(po.name, state.me && state.me.name); });
-    var html = '<div class="row" data-post-id="' + p.id + '">';
+    var joined = plusOnes.some(function (po) { return po.mine; });
+    var html = '<div class="row' + (isOwner ? ' is-mine' : '') + '" data-post-id="' + p.id + '">';
 
     html += '<div class="row-summary">';
     html += '<div class="row-time">' + (p.time ? formatTime(p.time) : "—") + '</div>';
@@ -854,18 +1318,6 @@
     html += '</div>';
     html += '</div>'; // row-summary
 
-    if (plusOnePrompting) {
-      html += '<div class="row-plusone-prompt">';
-      html += '<span>Add your name to be counted in on this trip:</span>';
-      html += '<form class="plusone-form" data-id="' + p.id + '">';
-      html += '<input type="text" class="plusone-name-input" placeholder="Your name" maxlength="60" required>';
-      html += '<button type="submit">Count me in</button>';
-      html += '<button type="button" class="btn-cancel-plusone" data-id="' + p.id + '">Cancel</button>';
-      html += '</form>';
-      html += '<div class="plusone-err err hidden"></div>';
-      html += '</div>';
-    }
-
     if (confirming) {
       html += '<div class="row-confirm">';
       html += '<span>Delete this post? This can\'t be undone.</span>';
@@ -876,6 +1328,11 @@
       html += '<div class="delete-err err hidden"></div>';
       html += '</div>';
     }
+
+    // Per-row error slot. Transport failures go to the global banner; things
+    // that are about this specific post ("you can only edit your own posts",
+    // "this was removed") belong next to the control that triggered them.
+    html += '<div class="row-err err hidden" data-err-for="' + p.id + '"></div>';
 
     html += '<div class="row-details' + (expanded ? '' : ' hidden') + '">';
     html += '<div class="comments-list">';
@@ -891,9 +1348,6 @@
     }
     html += '</div>'; // comments-list
     html += '<form class="comment-form" data-id="' + p.id + '">';
-    if (!state.me || !state.me.name) {
-      html += '<input type="text" class="comment-name-input" placeholder="Your name" maxlength="60" required>';
-    }
     html += '<div class="comment-row2">';
     html += '<input type="text" class="comment-text-input" placeholder="Add a comment…" maxlength="300" required>';
     html += '<button type="submit">Send</button>';
@@ -981,11 +1435,15 @@
 
     if (state.posts.length === 0) {
       meta.textContent = "";
-      board.innerHTML =
-        '<div class="empty">' +
-        '<div class="big">Nothing posted yet</div>' +
-        '<div>Be the first — post a trip and it\'ll show up here for the rest of the cohort.</div>' +
-        '</div>';
+      board.innerHTML = state.loaded
+        ? '<div class="empty">' +
+          '<div class="big">Nothing posted yet</div>' +
+          '<div>Be the first — post a trip and it\'ll show up here for the rest of the cohort.</div>' +
+          '</div>'
+        : '<div class="empty">' +
+          '<div class="big">Couldn\'t load the board</div>' +
+          '<div>See the notice above — this isn\'t an empty board, it\'s a board we couldn\'t reach.</div>' +
+          '</div>';
       return;
     }
 
@@ -1040,98 +1498,41 @@
       });
     });
 
+    // Helper for the inline, per-row error slot.
+    function rowError(id, message) {
+      var el = document.querySelector('[data-err-for="' + id + '"]');
+      if (!el) return;
+      el.textContent = message;
+      el.classList.remove("hidden");
+    }
+
     // +1 is a lightweight "count me in too" — no separate post, just your
-    // name added to (or removed from) the trip's interest list. A first-time
-    // visitor with no remembered name gets a one-field inline prompt instead
-    // of being sent through the full post form.
+    // name added to (or removed from) the trip's interest list. It no longer
+    // needs to ask who you are: the server knows, and it toggles a single
+    // row rather than rewriting a shared list, so two people +1'ing the same
+    // trip at the same instant can't overwrite each other.
     Array.prototype.forEach.call(document.querySelectorAll(".plusone-btn"), function (btn) {
       btn.addEventListener("click", async function () {
         var id = btn.getAttribute("data-id");
-        if (!state.me || !state.me.name) {
-          state.plusOnePrompt[id] = true;
-          render();
-          return;
-        }
-
-        var name = state.me.name;
+        var original = btn.textContent;
         btn.disabled = true;
 
-        var current = await loadPosts();
-        var target = current.find(function (p) { return String(p.id) === id; });
-        if (!target) { btn.disabled = false; return; }
-        if (!Array.isArray(target.plusOnes)) target.plusOnes = [];
+        var res = await api("/api/posts/" + id + "/plusone", { method: "POST" });
 
-        var already = target.plusOnes.some(function (po) { return namesMatch(po.name, name); });
-        if (already) {
-          target.plusOnes = target.plusOnes.filter(function (po) { return !namesMatch(po.name, name); });
-        } else {
-          target.plusOnes.push({ name: name, createdAt: Date.now() });
-        }
-
-        var result = await savePosts(current);
-        if (!result.ok) {
+        if (!res.ok) {
           btn.disabled = false;
-          var original = btn.textContent;
-          btn.textContent = "Try again";
-          setTimeout(function () { btn.textContent = original; }, 1600);
+          // The banner already covers transport and auth failures; only the
+          // post-specific ones need to be said here.
+          if (res.code === "NOT_FOUND" || res.code === "FORBIDDEN" || res.code === "INVALID") {
+            rowError(id, res.message);
+          } else {
+            btn.textContent = "Try again";
+            setTimeout(function () { if (btn.isConnected) btn.textContent = original; }, 1600);
+          }
           return;
         }
 
-        var today = todayISO();
-        state.posts = current.filter(function (p) { return p.date >= today; });
-        render();
-      });
-    });
-
-    Array.prototype.forEach.call(document.querySelectorAll(".btn-cancel-plusone"), function (btn) {
-      btn.addEventListener("click", function () {
-        var id = btn.getAttribute("data-id");
-        delete state.plusOnePrompt[id];
-        render();
-      });
-    });
-
-    Array.prototype.forEach.call(document.querySelectorAll(".plusone-form"), function (form) {
-      form.addEventListener("submit", async function (e) {
-        e.preventDefault();
-        var id = form.getAttribute("data-id");
-        var errEl = form.closest(".row-plusone-prompt").querySelector(".plusone-err");
-        errEl.classList.add("hidden");
-
-        var name = form.querySelector(".plusone-name-input").value.trim();
-        if (!name) return;
-
-        var submitBtn = form.querySelector('button[type="submit"]');
-        submitBtn.disabled = true;
-
-        var current = await loadPosts();
-        var target = current.find(function (p) { return String(p.id) === id; });
-        if (!target) {
-          errEl.textContent = "This post was removed — refresh the page.";
-          errEl.classList.remove("hidden");
-          submitBtn.disabled = false;
-          return;
-        }
-        if (!Array.isArray(target.plusOnes)) target.plusOnes = [];
-        if (!target.plusOnes.some(function (po) { return namesMatch(po.name, name); })) {
-          target.plusOnes.push({ name: name, createdAt: Date.now() });
-        }
-
-        var result = await savePosts(current);
-        submitBtn.disabled = false;
-
-        if (!result.ok) {
-          errEl.textContent = "Couldn't save — check your connection and try again.";
-          errEl.classList.remove("hidden");
-          return;
-        }
-
-        saveMe({ name: name });
-        state.me = { name: name };
-        delete state.plusOnePrompt[id];
-
-        var today = todayISO();
-        state.posts = current.filter(function (p) { return p.date >= today; });
+        applyBoard(res.data.posts);
         render();
       });
     });
@@ -1167,21 +1568,23 @@
         btn.disabled = true;
         btn.textContent = "Deleting…";
 
-        var current = await loadPosts();
-        var next = current.filter(function (p) { return String(p.id) !== id; });
-        var result = await savePosts(next);
+        // A soft delete server-side: the row is retained and the audit log
+        // keeps pointing at something real, so a mistaken delete is
+        // recoverable rather than gone.
+        var res = await api("/api/posts/" + id, { method: "DELETE" });
 
-        if (!result.ok) {
+        if (!res.ok) {
           btn.disabled = false;
           btn.textContent = "Yes, delete";
-          errEl.textContent = "Couldn't delete — check your connection and try again.";
+          errEl.textContent = res.code === "UNREACHABLE" || res.code === "OFFLINE"
+            ? "Couldn't delete — check your connection and try again."
+            : res.message;
           errEl.classList.remove("hidden");
           return;
         }
 
         delete state.confirmingDelete[id];
-        var today = todayISO();
-        state.posts = next.filter(function (p) { return p.date >= today; });
+        applyBoard(res.data.posts);
         render();
       });
     });
@@ -1193,44 +1596,27 @@
         var errEl = form.querySelector(".comment-err");
         errEl.classList.add("hidden");
 
-        var nameInput = form.querySelector(".comment-name-input");
         var textInput = form.querySelector(".comment-text-input");
-        var name = nameInput ? nameInput.value.trim() : (state.me && state.me.name);
         var text = textInput.value.trim();
-        if (!name || !text) return;
+        if (!text) return;
 
         var submitBtn = form.querySelector('button[type="submit"]');
         submitBtn.disabled = true;
 
-        var current = await loadPosts();
-        var target = current.find(function (p) { return String(p.id) === id; });
-        if (!target) {
-          errEl.textContent = "This post was removed — refresh the page.";
-          errEl.classList.remove("hidden");
-          submitBtn.disabled = false;
-          return;
-        }
-        if (!Array.isArray(target.comments)) target.comments = [];
-        target.comments.push({
-          id: Date.now() + "-" + Math.random().toString(36).slice(2, 8),
-          name: name,
-          text: text,
-          createdAt: Date.now()
-        });
-
-        var result = await savePosts(current);
+        // The comment is appended as its own row, so it can't clobber a
+        // comment someone else posted while this one was being typed.
+        var res = await api("/api/posts/" + id + "/comments", { method: "POST", body: { text: text } });
         submitBtn.disabled = false;
 
-        if (!result.ok) {
-          errEl.textContent = "Couldn't post your comment — check your connection and try again.";
+        if (!res.ok) {
+          errEl.textContent = res.code === "UNREACHABLE" || res.code === "OFFLINE"
+            ? "Couldn't post your comment — check your connection and try again."
+            : res.message;
           errEl.classList.remove("hidden");
           return;
         }
 
-        if (nameInput) { saveMe({ name: name }); state.me = { name: name }; }
-
-        var today = todayISO();
-        state.posts = current.filter(function (p) { return p.date >= today; });
+        applyBoard(res.data.posts);
         state.expanded[id] = true;
         render();
       });
@@ -1280,8 +1666,13 @@
       '<p class="sub">' + (isEdit ? "Update the details below — everyone with this link will see the change." : "Takes about 15 seconds. Visible to everyone with this link.") + '</p>' +
       '<form id="tripForm">' +
 
-      '<label>Your name<input type="text" id="f_name" required>' +
-      '<span class="hint">Remembered on this device after your first post — you won\'t need to retype it.</span>' +
+      // Name is no longer typed. It comes from the verified Berkeley account,
+      // which is what makes ownership work across devices and makes the
+      // audit log trustworthy — a name you can edit isn't evidence of
+      // anything. Shown read-only so posters still see what will appear.
+      '<label>Posting as' +
+      '<div class="posting-as"><strong>' + escapeHtml(me() ? me().name : '') + '</strong>' +
+      '<span>' + escapeHtml(me() ? me().email : '') + '</span></div>' +
       '</label>' +
 
       '<label>I am…</label>' +
@@ -1327,12 +1718,6 @@
     buildCitySelect(destSel);
     buildTimeSelects(backdrop.querySelector("#f_hour"), backdrop.querySelector("#f_minute"));
 
-    // prefill known identity, or the post being edited
-    if (isEdit) {
-      backdrop.querySelector("#f_name").value = editPost.name || "";
-    } else if (state.me) {
-      backdrop.querySelector("#f_name").value = state.me.name || "";
-    }
     var dateInput = backdrop.querySelector("#f_date");
     dateInput.min = todayISO();
 
@@ -1392,7 +1777,6 @@
       var errEl = backdrop.querySelector("#formErr");
       errEl.classList.add("hidden");
 
-      var name = backdrop.querySelector("#f_name").value.trim();
       var date = backdrop.querySelector("#f_date").value;
       var hourVal = backdrop.querySelector("#f_hour").value;
       var minuteVal = backdrop.querySelector("#f_minute").value;
@@ -1402,8 +1786,8 @@
       var originCity = originSel.value === "__other__" ? backdrop.querySelector("#f_originOther").value.trim() : originSel.value;
       var destCity = destSel.value === "__other__" ? backdrop.querySelector("#f_destOther").value.trim() : destSel.value;
 
-      if (!name || !date || !role || !originCity || !destCity) {
-        errEl.textContent = "Please fill in your name, role, route, and date.";
+      if (!date || !role || !originCity || !destCity) {
+        errEl.textContent = "Please fill in your role, route, and date.";
         errEl.classList.remove("hidden");
         return;
       }
@@ -1418,7 +1802,6 @@
       }
 
       var fields = {
-        name: name,
         role: role,
         seats: seats,
         date: date,
@@ -1434,49 +1817,25 @@
       submitBtn.disabled = true;
       submitBtn.textContent = isEdit ? "Saving…" : "Posting…";
 
-      var current = await loadPosts();
-      var result;
+      var res = isEdit
+        ? await api("/api/posts/" + editPost.id, { method: "PATCH", body: fields })
+        : await api("/api/posts", { method: "POST", body: fields });
 
-      if (isEdit) {
-        var idx = current.findIndex(function (p) { return String(p.id) === String(editPost.id); });
-        if (idx === -1) {
-          errEl.textContent = "This post was removed — refresh the page.";
-          errEl.classList.remove("hidden");
-          submitBtn.disabled = false;
-          submitBtn.textContent = "Save changes";
-          return;
-        }
-        current[idx] = Object.assign({}, current[idx], fields);
-        result = await savePosts(current);
-      } else {
-        var post = Object.assign({
-          id: Date.now() + "-" + Math.random().toString(36).slice(2, 8),
-          createdAt: Date.now(),
-          comments: [],
-          plusOnes: []
-        }, fields);
-        current.push(post);
-        result = await savePosts(current);
-      }
-
-      if (!result.ok) {
-        if (result.reason === "unconfigured") {
-          errEl.textContent = "This board isn't connected to a backend yet — ask whoever set up the page to add its storage key.";
-        } else {
-          errEl.textContent = "Couldn't save your post — check your connection and try again.";
-        }
-        errEl.classList.remove("hidden");
+      if (!res.ok) {
         submitBtn.disabled = false;
         submitBtn.textContent = isEdit ? "Save changes" : "Post trip";
+        // UNCONFIGURED / UNREACHABLE / OFFLINE / 5xx already raised the
+        // banner above the board; repeat only the short version here so the
+        // person staring at this form knows their post didn't save.
+        errEl.textContent = (res.code === "UNREACHABLE" || res.code === "OFFLINE" || res.code === "SERVER_ERROR")
+          ? "Couldn't save your post — see the notice above the board."
+          : res.message;
+        errEl.classList.remove("hidden");
         return;
       }
 
-      saveMe({ name: name });
-      state.me = { name: name };
-
-      var today = todayISO();
-      state.posts = current.filter(function (p) { return p.date >= today; });
-      if (!isEdit) state.filter = null;
+      applyBoard(res.data.posts);
+      if (!isEdit) { state.filter = null; state.dateFilter = null; }
 
       document.body.removeChild(backdrop);
       render();

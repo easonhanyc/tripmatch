@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>TripMatch — Activity Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #003057;
+    --blue-deep: #001b33;
+    --gold: #fdb515;
+    --paper: #f7f6f2;
+    --panel: #ffffff;
+    --ink: #1c2530;
+    --ink-soft: #57616d;
+    --line: #dcdad3;
+    --line-soft: #ececea;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--paper); color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+
+  header.top {
+    background: var(--blue); color: #fff;
+    padding: 22px 0 18px; border-bottom: 5px solid var(--gold);
+  }
+  header.top .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .eyebrow { margin: 0 0 3px; font-size: 11.5px; letter-spacing: 0.09em; text-transform: uppercase; opacity: 0.75; }
+  h1 { margin: 0; font-size: 25px; letter-spacing: -0.02em; }
+  .back { color: rgba(255,255,255,0.85); font-size: 12.5px; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.4); }
+  .back:hover { color: #fff; }
+
+  main { padding: 22px 0 60px; }
+
+  .notice {
+    padding: 12px 14px; border-radius: var(--radius);
+    font-size: 13.5px; line-height: 1.5; margin-bottom: 18px;
+  }
+  .notice.error { background: #fdeceb; border: 1px solid #f0b4ae; color: #8c1d18; }
+  .notice.info  { background: #e9f1f8; border: 1px solid #b6cee2; color: #1c4a72; }
+
+  .totals { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .total {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 9px; padding: 9px 13px; font-size: 12.5px; color: var(--ink-soft);
+  }
+  .total b { display: block; font-size: 18px; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .controls select, .controls input {
+    font-family: 'IBM Plex Sans', sans-serif; font-size: 13px;
+    padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--panel); color: var(--ink);
+  }
+  .controls button {
+    font-family: 'IBM Plex Sans', sans-serif; font-weight: 600; font-size: 12.5px;
+    padding: 8px 13px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--ink); cursor: pointer;
+  }
+  .controls button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .controls .spacer { flex: 1; }
+
+  .table-scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th {
+    text-align: left; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--ink-soft); padding: 10px 12px; border-bottom: 1px solid var(--line);
+    background: var(--paper); position: sticky; top: 0; white-space: nowrap;
+  }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; white-space: nowrap; }
+  .who { font-weight: 600; }
+  .who-email { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--ink-soft); }
+  .detail { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); max-width: 420px; word-break: break-word; }
+
+  .tag {
+    display: inline-block; font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 5px; white-space: nowrap;
+  }
+  .tag.create { background: #e7f4ed; color: #1c5238; }
+  .tag.update { background: #e9f1f8; color: #1c4a72; }
+  .tag.delete { background: #fdeceb; color: #8c1d18; }
+  .tag.login  { background: #f2eefb; color: #4a3080; }
+  .tag.denied { background: #fff3cd; color: #6b4a06; }
+  .tag.other  { background: var(--line-soft); color: var(--ink-soft); }
+
+  .empty { padding: 40px 20px; text-align: center; color: var(--ink-soft); font-size: 13.5px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap row">
+    <div>
+      <p class="eyebrow">TripMatch · admin</p>
+      <h1>Activity log</h1>
+    </div>
+    <a class="back" href="index.html">← Back to the board</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="notice" class="notice info">Loading the log…</div>
+
+  <div id="content" class="hidden">
+    <div class="totals" id="totals"></div>
+
+    <div class="controls">
+      <select id="fAction"><option value="">All actions</option></select>
+      <input type="text" id="fActor" placeholder="Filter by email…" size="22">
+      <select id="fRange">
+        <option value="0">All time</option>
+        <option value="1">Last 24 hours</option>
+        <option value="7">Last 7 days</option>
+        <option value="30">Last 30 days</option>
+      </select>
+      <button type="button" class="primary" id="reloadBtn">Reload</button>
+      <div class="spacer"></div>
+      <button type="button" id="csvBtn">Download CSV</button>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>When</th><th>Who</th><th>Action</th><th>Entity</th><th>Detail</th><th>Where</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="empty hidden" id="emptyState">No log entries match these filters.</div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // Same deployment as the board — keep these two in sync with index.html.
+  var API_BASE = "https://tripmatch-api.tripmatch-app.workers.dev";
+  var TOKEN_KEY = "tripmatch-session";
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function notice(kind, html) {
+    var el = document.getElementById("notice");
+    el.className = "notice " + kind;
+    el.innerHTML = html;
+    el.classList.remove("hidden");
+  }
+
+  function token() {
+    try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
+  }
+
+  function fmtTime(ms) {
+    var d = new Date(ms);
+    var pad = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+      " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  function tagClass(action) {
+    if (action.indexOf("denied") !== -1 || action === "rate_limited" || action === "login.rejected") return "denied";
+    if (action.indexOf("create") !== -1 || action.indexOf("add") !== -1) return "create";
+    if (action.indexOf("update") !== -1) return "update";
+    if (action.indexOf("delete") !== -1 || action.indexOf("remove") !== -1 || action.indexOf("expire") !== -1) return "delete";
+    if (action.indexOf("login") !== -1) return "login";
+    return "other";
+  }
+
+  // Render each action's payload the way a person would want to read it,
+  // rather than dumping raw JSON. Falls through to JSON for anything the
+  // worker starts logging that this page doesn't know about yet, so a new
+  // action type degrades to "still visible" rather than "blank cell".
+  function fmtDetail(action, raw) {
+    if (!raw) return "";
+    var d;
+    try { d = JSON.parse(raw); } catch (e) { return escapeHtml(raw); }
+
+    if (action === "post.create") {
+      return escapeHtml(
+        (d.role === "driver" ? "offering " + d.seats + " seat" + (d.seats === 1 ? "" : "s") : "needs a ride") +
+        " · " + d.route + " · " + d.date + (d.time ? " " + d.time : "")
+      );
+    }
+    if (action === "post.update") {
+      var keys = Object.keys(d.changed || {});
+      if (!keys.length) return "no field changed";
+      return escapeHtml(keys.map(function (k) {
+        return k + ": " + (d.changed[k].from || "—") + " → " + (d.changed[k].to || "—");
+      }).join(" · "));
+    }
+    if (action === "post.delete") {
+      return escapeHtml(d.route + " · " + d.date + " · by " + d.author);
+    }
+    if (action === "comment.create") {
+      return escapeHtml('"' + d.text + '" on post ' + d.postId);
+    }
+    if (action === "post.expire") {
+      return escapeHtml(d.count + " post" + (d.count === 1 ? "" : "s") + " aged out before " + d.before);
+    }
+    if (action === "migration.import") {
+      return escapeHtml(d.posts + " posts, " + d.comments + " comments, " + d.plusOnes + " +1s from " + d.source);
+    }
+    return escapeHtml(raw);
+  }
+
+  var allActions = [];
+
+  async function load() {
+    var t = token();
+    if (!t) {
+      notice("error",
+        'You\'re not signed in. <a href="index.html">Open the board</a> and sign in with your Berkeley account first — ' +
+        'the activity log uses the same session.');
+      return;
+    }
+    if (API_BASE.indexOf("REPLACE_WITH") !== -1) {
+      notice("error", "This page isn't configured yet — set <code>API_BASE</code> near the top of logs.html to match index.html.");
+      return;
+    }
+
+    var params = new URLSearchParams();
+    params.set("limit", "2000");
+    var action = document.getElementById("fAction").value;
+    var actor = document.getElementById("fActor").value.trim();
+    var days = parseInt(document.getElementById("fRange").value, 10);
+    if (action) params.set("action", action);
+    if (actor) params.set("actor", actor);
+    if (days) params.set("since", String(Date.now() - days * 86400000));
+
+    var res;
+    try {
+      res = await fetch(API_BASE + "/api/logs?" + params.toString(), {
+        headers: { Authorization: "Bearer " + t },
+        cache: "no-store"
+      });
+    } catch (e) {
+      notice("error", "Couldn't reach the TripMatch API. Check your connection and reload.");
+      return;
+    }
+
+    if (res.status === 401) {
+      notice("error", 'Your session expired. <a href="index.html">Sign in again</a>, then come back.');
+      return;
+    }
+    if (res.status === 403) {
+      notice("error", "This account isn't a TripMatch admin. Add it to the <code>ADMIN_EMAILS</code> worker secret to grant access.");
+      return;
+    }
+    if (!res.ok) {
+      notice("error", "The API returned an error (" + res.status + "). Try again in a moment.");
+      return;
+    }
+
+    var data = await res.json();
+    document.getElementById("notice").classList.add("hidden");
+    document.getElementById("content").classList.remove("hidden");
+
+    var byAction = (data.totals && data.totals.byAction) || [];
+    var total = byAction.reduce(function (n, r) { return n + r.n; }, 0);
+    var totalsHtml = '<div class="total"><b>' + total + '</b> events logged</div>';
+    totalsHtml += '<div class="total"><b>' + ((data.totals && data.totals.users) || 0) + '</b> signed-in people</div>';
+    byAction.slice(0, 6).forEach(function (r) {
+      totalsHtml += '<div class="total"><b>' + r.n + '</b> ' + escapeHtml(r.action) + '</div>';
+    });
+    document.getElementById("totals").innerHTML = totalsHtml;
+
+    // Populate the action filter once, from the full set the server knows
+    // about, so filtering to one action doesn't shrink the list of options.
+    if (!allActions.length && byAction.length) {
+      allActions = byAction.map(function (r) { return r.action; });
+      var sel = document.getElementById("fAction");
+      var keep = sel.value;
+      sel.innerHTML = '<option value="">All actions</option>' +
+        allActions.map(function (a) { return '<option value="' + escapeHtml(a) + '">' + escapeHtml(a) + "</option>"; }).join("");
+      sel.value = keep;
+    }
+
+    var rows = data.rows || [];
+    var body = document.getElementById("rows");
+    document.getElementById("emptyState").classList.toggle("hidden", rows.length > 0);
+
+    body.innerHTML = rows.map(function (r) {
+      return "<tr>" +
+        '<td class="mono">' + fmtTime(r.ts) + "</td>" +
+        "<td>" +
+          '<span class="who">' + escapeHtml(r.actor_name || "—") + "</span>" +
+          (r.actor_email ? '<span class="who-email">' + escapeHtml(r.actor_email) + "</span>" : "") +
+        "</td>" +
+        '<td><span class="tag ' + tagClass(r.action) + '">' + escapeHtml(r.action) + "</span></td>" +
+        '<td class="mono">' + escapeHtml(r.entity_id || r.entity_type || "—") + "</td>" +
+        '<td class="detail">' + fmtDetail(r.action, r.detail) + "</td>" +
+        '<td class="mono">' + escapeHtml(r.country || "—") + "</td>" +
+      "</tr>";
+    }).join("");
+  }
+
+  document.getElementById("reloadBtn").addEventListener("click", load);
+  document.getElementById("fAction").addEventListener("change", load);
+  document.getElementById("fRange").addEventListener("change", load);
+  document.getElementById("fActor").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") load();
+  });
+
+  // The CSV comes from the API rather than the rendered table, so an export
+  // is the authoritative log and not just whatever the current page shows.
+  document.getElementById("csvBtn").addEventListener("click", async function () {
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = "Preparing…";
+    try {
+      var params = new URLSearchParams({ format: "csv", limit: "5000" });
+      var res = await fetch(API_BASE + "/api/logs?" + params.toString(), {
+        headers: { Authorization: "Bearer " + token() }
+      });
+      if (!res.ok) throw new Error("http " + res.status);
+      var blob = await res.blob();
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "tripmatch-log-" + new Date().toISOString().slice(0, 10) + ".csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      notice("error", "Couldn't download the CSV. Try again in a moment.");
+    }
+    btn.disabled = false;
+    btn.textContent = "Download CSV";
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

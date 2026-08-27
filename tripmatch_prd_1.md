@@ -2,8 +2,8 @@
 *(working title — carpool coordination for the Haas community)*
 
 **Author:** Eason Han
-**Status:** Draft v1.3 — ready for external user testing
-**Last updated:** August 25, 2026
+**Status:** v2.0 — launch hardening complete
+**Last updated:** August 26, 2026
 
 ---
 
@@ -27,6 +27,76 @@ All three were validated locally against an isolated mock backend (multiple test
 
 ---
 
+## Launch Hardening — Infrastructure (Aug 26, 2026)
+
+Prototype feedback drove the three product gaps above. Preparing for public
+launch surfaced a different class of problem: the v1 storage design would not
+have survived the cohort it was built for. Four things shipped this round.
+
+### 1. Verified identity replaces the typed name
+
+**The constraint, stated plainly:** true CalNet SSO (Shibboleth/SAML) requires
+UC Berkeley IT to register TripMatch as an approved Service Provider — an
+application, a review, and a server-side SP that a static GitHub Pages site
+cannot be. The non-goal below recorded this correctly and it still holds.
+
+**What shipped instead:** Google Sign-In restricted to the `berkeley.edu`
+Workspace domain. Berkeley's bMail runs on Google Workspace, so every CalNet
+holder already has one, and the ID token is verified server-side against
+Google's published keys — issuer, audience, expiry, `email_verified`, and the
+`hd` domain claim. A personal Gmail account is rejected at the door.
+
+This closes the two open questions the PRD had been carrying:
+
+- *"Remembered identity is scoped to a single device/browser."* — **Resolved.**
+  Identity now follows the person. Posting from a laptop and editing from a
+  phone works.
+- *"Ownership is still just a name match, not a login."* — **Resolved.**
+  Ownership is an email match against a verified account. Nobody can claim
+  someone else's post by typing their name, and there's no way to be locked
+  out of your own by a spelling difference.
+
+Posts that predate launch have no email attached; they fall back to the old
+name match so their authors keep control, and the first edit stamps the
+verified email in permanently.
+
+### 2. Activity log
+
+Every mutation — and every *denied* mutation — appends a row recording who,
+what, when, and what changed. Admins read it at `logs.html`, filterable by
+action, actor, and date, exportable as CSV. Posts are soft-deleted, so a
+mistaken delete is recoverable rather than gone.
+
+### 3. Honest failure states
+
+v1 failed silently: a dead backend rendered as **"Nothing posted yet"**, which
+reads as an empty board and invites a duplicate post. There is now one banner
+above the board covering offline, unreachable, server error, rate limited, and
+expired session — each with the action that might fix it, and the empty board
+now distinguishes "nothing here" from "couldn't ask".
+
+### 4. Storage rebuilt on Cloudflare Workers + D1
+
+The v1 JSONBin design had three defects that all bite inside the expected
+usage (~400 students, ~200 concurrent posts):
+
+| Defect | Consequence |
+|---|---|
+| API key published in page source | Any visitor could wipe the entire board |
+| Whole-board read-modify-write | Simultaneous posts silently overwrote each other |
+| One 100 KB JSON document | Board freezes at roughly 100–150 posts with comments — about half the expected peak |
+
+Every mutation is now a targeted SQL statement against a single row, all
+credentials live server-side, and the free tier carries 30×+ headroom on every
+dimension but one (row reads, at 4×, with a documented mitigation). Full
+analysis in [INFRASTRUCTURE.md](INFRASTRUCTURE.md).
+
+Verified by 70 automated checks against the real worker code and real SQL —
+including a concurrency test that fires 36 simultaneous writes and asserts all
+of them survive, which the v1 design would have failed.
+
+---
+
 ## Goals
 
 1. Give students a faster way to find a matching ride than scrolling WhatsApp — target: a user can post or find a match in under 2 minutes.
@@ -42,7 +112,7 @@ All three were validated locally against an isolated mock backend (multiple test
 - **Not a real-time dispatch or booking system.** This is not Uber — it connects people who then coordinate logistics themselves.
 - **Not a replacement for WhatsApp.** Final coordination (exact pickup point, contact exchange) happens off-platform; the tool's only job is surfacing the match.
 - **No open/public matching in v1.** Restricted to the Haas community — opening to strangers reintroduces the trust problem this design is specifically meant to avoid.
-- **No formal identity verification (email login, magic link, or true campus SSO).** True CalNet-style single sign-on would require UC Berkeley IT to register this as an approved service provider — not achievable for a v1 build. Trust instead comes from the distribution channel itself: the link only ever circulates inside the private Haas WhatsApp chat, so anyone who has it is already a verified member of that trusted group. Only a name is collected, and it's remembered locally after first use so it isn't re-entered on every visit.
+- **No formal identity verification (email login, magic link, or true campus SSO).** ~~True CalNet-style single sign-on would require UC Berkeley IT to register this as an approved service provider — not achievable for a v1 build. Trust instead comes from the distribution channel itself.~~ **Superseded at launch (Aug 26, 2026).** The CalNet constraint still holds and is unchanged, but the conclusion drawn from it no longer does: Google Sign-In scoped to the `berkeley.edu` Workspace domain delivers verified identity without IT involvement, and the v1 trust model turned out to be load-bearing for more than trust — ownership, the audit log, and cross-device editing all depended on it. See the Launch Hardening section above.
 - **No native mobile app.** A mobile-friendly web link is the right form factor — zero install friction, one tap from a WhatsApp message.
 
 ---
@@ -113,6 +183,8 @@ All three were validated locally against an isolated mock backend (multiple test
 ## Open Questions
 
 - **What's the initial city-to-region lookup table, and who maintains it if a city is missing?** — needs a first-pass list (e.g., which cities count as "South Bay" vs. "Peninsula") before the categorization logic can be built. *(Product decision.)*
-- **"Remembered identity" is scoped to a single device/browser.** If a student posts from their laptop and later opens the link on their phone, they'll be asked for their name again. Worth deciding whether that's acceptable for v1 or needs a fix. *(Product decision — recommend accepting as a known v1 limitation.)*
+- ~~**"Remembered identity" is scoped to a single device/browser.**~~ **Resolved (Aug 26, 2026)** — identity is a verified Berkeley account, so it follows the person across devices.
 - **Does removing an expired post also need to notify anyone who had a pending interest in it?** — minor, but worth a quick decision so users aren't left wondering why a post disappeared. *(Product/design.)*
-- **Ownership is still just a name match, not a login.** Edit and Delete both reuse the same "remembered name on this device" check as before — the match is now trim + case-insensitive (a fix for the exact-string version silently locking people out over a typo'd space or capitalization), but it's still not real auth: posting from a second device, or under a name spelled differently enough to not fuzzy-match, means that post can no longer be edited or deleted at all — there's no "claim this post" flow. Same trust trade-off the PRD already accepted for v1; worth revisiting only if it causes real confusion. *(Product decision — recommend accepting as a known limitation, same as the single-device identity question above.)*
+- ~~**Ownership is still just a name match, not a login.**~~ **Resolved (Aug 26, 2026)** — ownership is an email match against a verified account, enforced server-side. Posts imported from the pre-auth board keep the name fallback until their author's first edit.
+
+- **New: does Berkeley-wide access need narrowing to Haas?** The domain gate proves `berkeley.edu`, not Haas specifically. Given the link circulates in the Haas group chat this is likely fine, but an email allow-list could tighten it. *(Product decision — recommend watching the activity log for unexpected sign-ins before acting.)*

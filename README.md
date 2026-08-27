@@ -6,24 +6,56 @@ A shared rides board for the Haas community — post a trip, see who else is goi
 
 ## What it does
 
-Anyone with the link can post a trip — offering seats or looking for a ride — with a route, date, and time. The board groups posts by route and date, and once several dates are active a row of date chips lets you jump straight to one day instead of scrolling. No accounts and nothing to install: open the link, type your name once, and it's remembered on that device for next time.
+Anyone with a Berkeley account can post a trip — offering seats or looking for a ride — with a route, date, and time. The board groups posts by route and date, and once several dates are active a row of date chips lets you jump straight to one day instead of scrolling. Nothing to install: open the link, sign in with the Google account behind your bMail, and you're on the board.
 
 ## Features
 
-- **Post a trip** — name, role (driving / need a ride), origin and destination city, date, optional time and notes
+- **Berkeley-only sign-in** — Google Sign-In restricted to the `berkeley.edu` Workspace domain, verified server-side, so everyone on the board is a verified member of the community
+- **Post a trip** — role (driving / need a ride), origin and destination city, date, optional time and notes
 - **Grouped, filterable board** — routes grouped by region + date, with one-click filters for role and date
 - **Comments** — ask a question on someone's post without leaving the page
 - **+1 a post** — fit an existing trip exactly? Count yourself in instead of posting a duplicate
-- **Edit or delete your own post** — matched by the name you posted under, with a two-step confirm before anything is deleted
+- **Edit or delete your own post** — matched to your verified account, so it works from any device, with a two-step confirm before anything is deleted
 - **Automatic expiry** — a post disappears from the board once its trip date has passed
+- **Activity log** — every post, edit, delete, comment, +1 and sign-in is recorded with who and when, readable at `logs.html` by admins
+- **Failure banner** — if TripMatch can't reach its backend, the page says so plainly instead of looking like an empty board
 
 ## How it's built
 
-One static HTML file (`index.html`), no build step, hosted on GitHub Pages. The shared board lives in a single JSONBin.io JSON store, read and written directly from the browser. There's no login — identity is just a name remembered per device, and trust comes from the link only circulating inside the private Haas group chat. Full detail, requirements, and open product questions live in [tripmatch_prd_1.md](tripmatch_prd_1.md).
+Still a static front-end with no build step — `index.html` and `logs.html` on GitHub Pages — but the data now lives behind a small API instead of in the browser's hands.
+
+```
+GitHub Pages (index.html)  →  Cloudflare Worker  →  D1 (SQLite)
+        ↕
+Google Identity Services (berkeley.edu only)
+```
+
+The Worker holds every credential, verifies the Google ID token against Google's public keys, enforces the `berkeley.edu` domain, and performs all writes as targeted SQL statements — so two people posting at the same moment can't overwrite each other. The browser never holds a secret and never writes directly.
+
+This replaced a JSONBin setup that shipped an API key in the page source and rewrote the whole board as one JSON blob on every action. [INFRASTRUCTURE.md](INFRASTRUCTURE.md) explains what would have broken and when, why CalNet SSO proper isn't achievable without UC Berkeley IT, and what to watch as usage grows. Product requirements and open questions are in [tripmatch_prd_1.md](tripmatch_prd_1.md).
+
+## Repository layout
+
+| Path | What it is |
+|---|---|
+| `index.html` | The board — the whole front-end |
+| `logs.html` | Admin activity-log viewer |
+| `worker/worker.js` | The API |
+| `worker/schema.sql` | Database schema |
+| `worker/test/api.test.mjs` | 70 checks against the real worker and real SQL |
+| `scripts/migrate-jsonbin-to-d1.mjs` | One-shot import from the old board |
+| `DEPLOY.md` | Step-by-step deploy runbook |
+| `INFRASTRUCTURE.md` | Architecture, scalability analysis, known limits |
 
 ## Running it locally
 
-It's one file — open `index.html` in a browser, or serve the folder with any static file server. The deployed instance already has a shared backend configured; to test against your own data, point `JSONBIN_BIN_ID` / `JSONBIN_KEY` near the top of `index.html` at your own free [JSONBin.io](https://jsonbin.io) bin.
+See [DEPLOY.md](DEPLOY.md#running-it-locally). In short: `npx wrangler dev` in `worker/`, serve the repo root statically, and point `API_BASE` at the local Worker.
+
+To run the test suite — no network or Cloudflare account needed:
+
+```bash
+cd worker/test && node api.test.mjs
+```
 
 ## Found a bug, or something's missing?
 

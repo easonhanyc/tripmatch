@@ -1,0 +1,29 @@
+name = "tripmatch-api"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+# Daily archive pass at 08:10 UTC (about 1:10am Pacific) — past-dated posts
+# are already hidden by the board query, so this is housekeeping.
+[triggers]
+crons = ["10 8 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tripmatch"
+database_id = "c2eb115e-c124-46c2-8bdc-6dcf0fe9efa1"
+
+[vars]
+# Public, non-secret. The OAuth client ID is visible in the front-end too —
+# that's normal and safe; it identifies the app, it doesn't authorize anything.
+GOOGLE_CLIENT_ID = "463078890652-qm9j13cicdrla2rlguqg847e4aru2umr.apps.googleusercontent.com"
+
+# Exact origins only, comma separated. Add http://localhost:8788 while testing
+# locally, and take it out before you're done for the night.
+ALLOWED_ORIGINS = "https://tripmatch-app.github.io"
+
+# The Google Workspace domain that gates sign-in.
+ALLOWED_HD = "berkeley.edu"
+
+# Secrets are NOT set here — they'd end up in git. Set them with:
+#   npx wrangler secret put SESSION_SECRET
+#   npx wrangler secret put ADMIN_EMAILS

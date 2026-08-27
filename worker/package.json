@@ -1,0 +1,15 @@
+{
+  "name": "tripmatch-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "schema": "wrangler d1 execute tripmatch --remote --file=./schema.sql",
+    "schema:local": "wrangler d1 execute tripmatch --local --file=./schema.sql",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}
