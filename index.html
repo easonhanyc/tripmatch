@@ -1494,6 +1494,14 @@
     var full = isSeatClaim && seatsLeft === 0;
     var myParty = 0;
     plusOnes.forEach(function (po) { if (po.mine) myParty = po.party || 1; });
+
+    // Everyone wanting this ride: the poster's own party plus everyone who
+    // has since said they're going the same way. A driver reading the board
+    // needs one number — "can I fit them?" — not a poster count and a
+    // separate +1 tally to add up in their head.
+    var ridersTotal = isSeatClaim
+      ? 0
+      : (p.partySize || 1) + plusOnes.reduce(function (n, po) { return n + (po.party || 1); }, 0);
     var partyPrompting = !!state.partyPrompt[p.id];
     var html = '<div class="row' + (isOwner ? ' is-mine' : '') + '" data-post-id="' + p.id + '">';
 
@@ -1509,8 +1517,9 @@
         ? '<span class="badge full">Full · ' + p.seats + ' seat' + (p.seats == 1 ? "" : "s") + ' taken</span>'
         : '<span class="badge driver">Offering · ' + seatsLeft + ' of ' + p.seats + ' seat' + (p.seats == 1 ? "" : "s") + ' left</span>';
     } else {
-      html += '<span class="badge rider">' +
-        ((p.partySize || 1) > 1 ? 'Needs ' + p.partySize + ' seats' : 'Needs a ride') + '</span>';
+      // Same shape as the driver badge — label, dot, the number that matters.
+      html += '<span class="badge rider">Needs a ride' +
+        (ridersTotal > 1 ? ' · ' + ridersTotal + ' people' : '') + '</span>';
     }
     html += '</div>';
     html += '<div class="cities">' + escapeHtml(p.originCity) + ' → ' + escapeHtml(p.destCity) + '</div>';
@@ -1549,13 +1558,21 @@
       }
     } else {
       btnClass += joined ? ' joined' : (plusOnes.length ? ' has-plusones' : '');
-      // The count is people, not claims, so a "+1 · 3" can be two accounts
-      // where one is bringing a guest.
-      var goingCount = plusOnes.reduce(function (n, po) { return n + (po.party || 1); }, 0);
-      btnLabel = (joined ? '✓ ' : '') + '+1 · ' + goingCount;
-      btnTitle = plusOnes.length
-        ? plusOnes.map(function (po) { return po.name; }).join(', ')
-        : 'Going the same way? Count yourself in.';
+      // "+1 · 3" made people work out what the 3 counted. The headcount now
+      // lives in the badge, so this is just the action — the same division of
+      // labour as "Offering · 2 of 3 seats left" / "Take a seat".
+      btnLabel = joined
+        ? (myParty > 1 ? '✓ Going · ' + myParty : '✓ Going')
+        : '+1';
+      btnTitle = joined
+        ? (myParty > 1 ? 'You and ' + (myParty - 1) + ' other' + (myParty === 2 ? '' : 's') +
+             ' are counted in — tap to remove.' : "You're counted in — tap to remove.")
+        : (plusOnes.length
+            ? 'Also going: ' + plusOnes.map(function (po) {
+                var extra = (po.party || 1) - 1;
+                return po.name + (extra > 0 ? ' +' + extra : '');
+              }).join(', ')
+            : 'Going the same way? Count yourself in.');
     }
 
     if (isOwner) { btnDisabled = true; btnTitle = 'This is your own post'; }
