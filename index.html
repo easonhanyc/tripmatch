@@ -1591,7 +1591,7 @@
     var needing = state.posts.filter(function (p) { return p.role === "rider"; }).length;
     document.getElementById("statRow").innerHTML =
       '<button type="button" class="stat-btn' + (!state.filter ? ' active' : '') + '" data-filter="all"><b>' + state.posts.length + '</b> open trips</button>' +
-      '<button type="button" class="stat-btn' + (state.filter === "driver" ? ' active' : '') + '" data-filter="driver"><b>' + offering + '</b> offering seats</button>' +
+      '<button type="button" class="stat-btn' + (state.filter === "driver" ? ' active' : '') + '" data-filter="driver"><b>' + offering + '</b> offering a ride</button>' +
       '<button type="button" class="stat-btn' + (state.filter === "rider" ? ' active' : '') + '" data-filter="rider"><b>' + needing + '</b> looking for a ride</button>';
 
     Array.prototype.forEach.call(document.querySelectorAll(".stat-btn"), function (btn) {
@@ -1628,7 +1628,7 @@
     });
 
     var filterLabels = [];
-    if (state.filter) filterLabels.push(state.filter === "driver" ? "offering seats" : "looking for a ride");
+    if (state.filter) filterLabels.push(state.filter === "driver" ? "offering a ride" : "looking for a ride");
     if (state.dateFilter) filterLabels.push(formatDate(state.dateFilter));
     var hasFilter = filterLabels.length > 0;
 
@@ -1645,6 +1645,13 @@
 
     var groups = groupPosts(visiblePosts);
     var metaText = groups.length + " route" + (groups.length === 1 ? "" : "s") + " active";
+
+    // What a rider scanning the board actually wants to know: is there a seat
+    // anywhere? Counted across visible posts so it respects the filters.
+    var seatsFree = visiblePosts.reduce(function (n, p) {
+      return p.role === "driver" ? n + Math.max(0, p.seats - (p.plusOnes || []).length) : n;
+    }, 0);
+    if (seatsFree > 0) metaText += " · " + seatsFree + " seat" + (seatsFree === 1 ? "" : "s") + " free";
     if (hasFilter) {
       meta.innerHTML = metaText + ' · showing: ' + filterLabels.join(", ") + ' <a href="#" id="clearFilterLink">(clear)</a>';
     } else {
