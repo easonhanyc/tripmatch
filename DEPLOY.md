@@ -57,7 +57,14 @@ grants access to your whole JSONBin account.
    - **Authorized JavaScript origins** — both of these:
      - `https://tripmatch-app.github.io`
      - `http://localhost:8788` *(remove after testing)*
-   - Leave redirect URIs empty — Google Identity Services doesn't use them
+   - **Authorized redirect URIs** — one entry, your Worker's sign-in endpoint:
+     - `https://tripmatch-api.<your-subdomain>.workers.dev/api/auth/redirect`
+
+     This is only used by readers in an app's built-in browser, who can't run
+     the popup flow (see [Sign-in in embedded browsers](#sign-in-in-embedded-browsers)).
+     Google matches it exactly, so the scheme, host and path must all agree —
+     no trailing slash. You won't have the Worker's hostname until Step 3, so
+     come back and add it then.
 4. Copy the **Client ID** (ends `.apps.googleusercontent.com`)
 
 > The client ID is public and appears in `index.html`. That's expected — it
@@ -286,6 +293,47 @@ cd worker && npx wrangler secret put SESSION_SECRET   # enter a fresh value
 
 ---
 
+## Sign-in in embedded browsers
+
+A link tapped inside WhatsApp or Instagram opens in that app's own built-in
+browser rather than Safari or Chrome. Google's popup sign-in cannot complete
+there: the credential is returned through the window that opened the popup,
+and one of these browsers has no second window to open — it navigates its only
+window to `accounts.google.com`, and the credential has nowhere to come back
+to. The reader is left on a blank page, having never reached the API, so the
+failure leaves nothing in the activity log either.
+
+TripMatch detects those browsers and switches them to Google's **redirect**
+flow, which takes the second window out of the picture:
+
+1. Google collects the sign-in in the same window.
+2. Google form-POSTs the credential to `/api/auth/redirect` on the Worker —
+   this is why that URL has to be an **Authorized redirect URI** on the OAuth
+   client (Step 1). It is matched exactly.
+3. The Worker verifies the token exactly as it does for the popup flow, then
+   redirects back to the board with the session in the URL **fragment**. A
+   fragment is never sent to a server and never appears in a `Referer`, and
+   the board strips it from history as it reads it.
+
+Everyone else keeps the popup flow, which never leaves the page.
+
+Two things worth knowing:
+
+- **Google may still refuse.** It blocks sign-in in some embedded browsers on
+  principle, regardless of flow. If that happens the reader sees Google's own
+  "browser may not be secure" page. The gate carries a permanent one-line way
+  out — *"Stuck on a blank Google page? Open TripMatch in Safari or Chrome"* —
+  which opens instructions and a copy-link button for exactly this case.
+- **CSRF is guarded by `Origin`, not by `g_csrf_token`.** Google's documented
+  double-submit cookie is set on the *page's* domain, and this login endpoint
+  lives on another one (a static GitHub Pages site can't receive a POST), so
+  that cookie never arrives. A browser always sends `Origin` on a cross-site
+  form POST and cannot forge it, so the Worker refuses any POST that didn't
+  come from `accounts.google.com`. The cookie check still runs whenever a
+  cookie *is* present.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -296,4 +344,6 @@ cd worker && npx wrangler secret put SESSION_SECRET   # enter a fresh value
 | Banner: "isn't connected to its backend yet" | `API_BASE` is still a placeholder | Set it in `index.html` and `logs.html` |
 | `/api/health` returns `ok:false` | D1 binding wrong or schema not applied | Recheck `database_id`; re-run the schema command |
 | Log page says "isn't a TripMatch admin" | Email missing from `ADMIN_EMAILS` | Re-put the secret with the full list |
+| Blank page after tapping sign-in, nothing in the log | The reader is in an app's built-in browser (see [Sign-in in embedded browsers](#sign-in-in-embedded-browsers)) | Ask them to open TripMatch in Safari or Chrome; check the redirect URI is registered |
+| Google shows `redirect_uri_mismatch` | `/api/auth/redirect` isn't an Authorized redirect URI, or doesn't match exactly | Add the Worker URL to the OAuth client, exactly, with no trailing slash |
 | A user can't edit their pre-launch post | Their Google display name differs from the name they posted under | Ask them to repost, or reassign: `UPDATE posts SET author_email='them@berkeley.edu' WHERE id='…'` |

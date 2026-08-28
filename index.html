@@ -1548,6 +1548,33 @@
     return typeof navigator.standalone === "undefined";
   }
 
+  // The return leg of the redirect flow. The session arrives in the URL
+  // fragment because a static page has nowhere else to receive it — a
+  // fragment is never sent to a server and never appears in a Referer. Read
+  // it and rewrite the address bar in the same breath: replaceState rewrites
+  // the current history entry, so the token doesn't linger in the back stack
+  // for the next person to pick up the phone.
+  function takeRedirectResult() {
+    var hash = location.hash || "";
+    var tok = /[#&]tm=([^&]+)/.exec(hash);
+    var err = /[#&]tmerr=([^&]+)/.exec(hash);
+    if (!tok && !err) return null;
+
+    try {
+      history.replaceState(null, "", location.pathname + location.search);
+    } catch (e) {
+      location.hash = "";
+    }
+    return tok ? { token: decodeURIComponent(tok[1]) } : { error: err[1] };
+  }
+
+  function signInErrorMessage(code, message) {
+    if (code === "WRONG_DOMAIN") {
+      return "That's not a @" + ALLOWED_DOMAIN + " account. TripMatch is limited to the Berkeley community — sign in with your Berkeley account.";
+    }
+    return message || "Couldn't sign you in. Try again.";
+  }
+
   function showInAppHelp() {
     document.getElementById("authInApp").classList.remove("hidden");
     document.getElementById("authHint").classList.add("hidden");
@@ -1591,14 +1618,14 @@
       return;
     }
 
-    // Warn before they tap, not after — by the time Google's blank page is on
-    // screen there is nothing of ours left to read it from. Undetectable
-    // WebViews exist, so everyone else gets the same way out, quietly. This
-    // runs again on every retry tick and every return to the gate, so the
-    // hint must not reappear underneath a panel the reader already opened.
-    if (isInAppBrowser()) {
-      showInAppHelp();
-    } else if (document.getElementById("authInApp").classList.contains("hidden")) {
+    // An embedded browser now gets a flow that should work, so it isn't told
+    // up front that it can't sign in — it's offered the same one-line way out
+    // as everyone else, which is what it needs if Google blanks the page
+    // before we ever hear back. The full panel waits until it's asked for, or
+    // until a redirect actually fails. This runs again on every retry tick and
+    // every return to the gate, so the hint must not reappear underneath a
+    // panel the reader already opened.
+    if (document.getElementById("authInApp").classList.contains("hidden")) {
       document.getElementById("authHint").classList.remove("hidden");
     }
 
@@ -1613,13 +1640,24 @@
 
     if (target.childElementCount > 0) return; // already mounted
 
-    window.google.accounts.id.initialize({
+    // Two ways home. The popup flow returns the credential through the window
+    // that opened it, and is what every successful sign-in on this board has
+    // used — it never leaves the page, so it stays the default. An app's
+    // built-in browser can't open that second window, so those readers get the
+    // redirect flow instead: Google posts the credential to the Worker, which
+    // signs them in and sends them back here with the session in the fragment.
+    var opts = {
       client_id: GOOGLE_CLIENT_ID,
       callback: onGoogleCredential,
       hd: ALLOWED_DOMAIN,          // asks Google to show only berkeley.edu accounts
       auto_select: true,           // silently reuses a single known account
       cancel_on_tap_outside: false
-    });
+    };
+    if (isInAppBrowser()) {
+      opts.ux_mode = "redirect";
+      opts.login_uri = API_BASE + "/api/auth/redirect";
+    }
+    window.google.accounts.id.initialize(opts);
     window.google.accounts.id.renderButton(target, {
       theme: "outline", size: "large", text: "signin_with",
       shape: "pill", logo_alignment: "left", width: 280
@@ -1638,9 +1676,7 @@
     var res = await api("/api/auth/session", { method: "POST", body: { credential: response.credential } });
     if (!res.ok) {
       fallback.textContent = "";
-      var msg = res.code === "WRONG_DOMAIN"
-        ? "That's not a @" + ALLOWED_DOMAIN + " account. TripMatch is limited to the Berkeley community — sign in with your Berkeley account."
-        : res.message || "Couldn't sign you in. Try again.";
+      var msg = signInErrorMessage(res.code, res.message);
       // A rejected account shouldn't leave a silently auto-selected one in
       // place, or the next attempt reuses it without showing the picker.
       if (window.google && window.google.accounts) window.google.accounts.id.disableAutoSelect();
@@ -1705,6 +1741,37 @@
     if (!configured()) {
       showGate();
       showBanner("unconfigured");
+      return;
+    }
+
+    // A redirect sign-in lands here rather than in onGoogleCredential, so it
+    // has to be picked up before any stored session is consulted — the token
+    // in the fragment is the newer of the two.
+    var handoff = takeRedirectResult();
+    if (handoff && handoff.error) {
+      // A failed redirect is the one case where the reader is back on our page
+      // with a sign-in that didn't take, so it's the right moment to offer the
+      // way out in full rather than as one line.
+      showGate(signInErrorMessage(handoff.error, null));
+      if (handoff.error !== "WRONG_DOMAIN") showInAppHelp();
+      return;
+    }
+    if (handoff) {
+      // Provisional until /api/me confirms it — that call is also what fills
+      // in the name and email, which the redirect deliberately doesn't carry
+      // through the URL.
+      session.token = handoff.token;
+      var who = await api("/api/me");
+      if (who.ok) {
+        storeSession(handoff.token, who.data.user);
+        banner.clear();
+        showApp();
+        await start();
+      } else {
+        clearSession();
+        banner.clear();
+        showGate(signInErrorMessage(null, null));
+      }
       return;
     }
 
