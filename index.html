@@ -1042,8 +1042,9 @@
       </p>
       <div class="auth-inapp hidden" id="authInApp">
         <strong>Open this in your browser to sign in</strong>
-        A link tapped in WhatsApp or Instagram opens in that app's own built-in
-        browser, and Google sign-in can't finish there — it stops on a blank page.
+        A link tapped in WhatsApp or WeChat opens in that app's own built-in
+        browser, and Google sign-in can't complete there — it either stops on a
+        blank page or never loads at all.
         <ol>
           <li>Tap the <b>⋯</b> or share button in this bar.</li>
           <li>Choose <b>Open in Safari</b> or <b>Open in Chrome</b>.</li>
@@ -1630,8 +1631,15 @@
     }
 
     if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+      // Google's script never arrived. In an app's built-in browser that is
+      // usually the app blocking Google outright — WeChat's does — and no
+      // amount of reloading will change it, so lead with the way out and
+      // open the instructions rather than sending the reader to check their
+      // network first. Reload stays offered second, for a real browser that
+      // simply lost the script.
       if (gsiTries++ > 40) {
-        fallback.innerHTML = "Google sign-in didn't load. Check that accounts.google.com isn't blocked on your network, then <a href=\"\" onclick=\"location.reload();return false;\">reload</a>.";
+        fallback.innerHTML = "Google sign-in didn't load. If you opened this from inside another app, that app is blocking it — open TripMatch in Safari or Chrome. Otherwise check that accounts.google.com isn't blocked on your network, then <a href=\"\" onclick=\"location.reload();return false;\">reload</a>.";
+        showInAppHelp();
         return;
       }
       setTimeout(mountGoogleButton, 150);
