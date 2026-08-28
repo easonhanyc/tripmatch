@@ -488,6 +488,104 @@ function validatePostBody(body) {
 }
 
 /**
+ * Where to send a browser back to after redirect-mode sign-in. The first
+ * allow-listed origin is the board; there is deliberately no way for a
+ * request to nominate its own return address, which would turn this endpoint
+ * into an open redirect that launders a session token to any site that asked.
+ */
+function boardOrigin(env) {
+  return (env.ALLOWED_ORIGINS || "").split(",")[0].trim();
+}
+
+function seeOther(location) {
+  return new Response(null, {
+    status: 303,
+    headers: { Location: location, "Cache-Control": "no-store" },
+  });
+}
+
+/**
+ * Google sign-in for browsers that cannot run the popup flow.
+ *
+ * The popup flow returns the credential through the window that opened it. An
+ * app's built-in browser — WhatsApp's above all, which is where this board's
+ * link circulates — can't open a second window, so it navigates its only
+ * window to accounts.google.com and the credential has nowhere to come back
+ * to: a blank page, and not so much as a rejected-login row to show for it.
+ * Redirect mode takes the second window out of the flow entirely; Google
+ * form-POSTs the credential straight here instead.
+ *
+ * The session goes back in the URL fragment because the board is a static
+ * page with nowhere else to receive it. A fragment is never sent to a server
+ * and never appears in a Referer, and the board strips it from history the
+ * moment it reads it.
+ */
+async function handleAuthRedirect(request, env) {
+  const board = boardOrigin(env);
+  const back = (frag) => seeOther(board + "/#" + frag);
+
+  // Login CSRF is the risk this flow adds: someone else's valid Google
+  // credential, POSTed by a victim's browser, would sign that victim into the
+  // attacker's account. Google's documented defence is a `g_csrf_token`
+  // cookie matching a body field, but that cookie is set on the page's own
+  // domain and this endpoint lives on another (a static GitHub Pages site
+  // cannot receive a POST), so the browser never sends it here. The check
+  // that does work cross-domain is the Origin header: a browser always sends
+  // it on a cross-site form POST and cannot forge it, so a POST from anywhere
+  // but Google is refused. A request with no Origin isn't a browser and so
+  // can't be a CSRF victim — it would only be signing itself in.
+  const origin = request.headers.get("Origin");
+  if (origin && origin !== "https://accounts.google.com") {
+    await logEvent(env, request, null, "login.rejected", "session", null, { reason: "bad_post_origin", origin });
+    return back("tmerr=BAD_ORIGIN");
+  }
+
+  const form = await request.formData().catch(() => null);
+  if (!form) return back("tmerr=BAD_CREDENTIAL");
+
+  // Belt and braces: if the cookie ever does arrive, hold it to the match.
+  const sent = form.get("g_csrf_token");
+  const cookie = /(?:^|;\s*)g_csrf_token=([^;]+)/.exec(request.headers.get("Cookie") || "");
+  if (cookie && (!sent || !timingSafeEqual(String(sent), cookie[1]))) {
+    await logEvent(env, request, null, "login.rejected", "session", null, { reason: "csrf_mismatch" });
+    return back("tmerr=BAD_CREDENTIAL");
+  }
+
+  let user;
+  try {
+    user = await verifyGoogleToken(form.get("credential"), env);
+  } catch (e) {
+    const domainProblem = e.message === "wrong_domain" || e.message === "email_unverified";
+    await logEvent(env, request, null, "login.rejected", "session", null, { reason: e.message, via: "redirect" });
+    return back("tmerr=" + (domainProblem ? "WRONG_DOMAIN" : "BAD_CREDENTIAL"));
+  }
+
+  await recordLogin(env, request, user, "redirect");
+  return back("tm=" + encodeURIComponent(await mintSession(user, env)));
+}
+
+/**
+ * The bookkeeping both sign-in routes share: the user row, and the log line
+ * that made the original WhatsApp report traceable once it finally reached us.
+ */
+async function recordLogin(env, request, user, via) {
+  const now = Date.now();
+  await env.DB.prepare(
+    `INSERT INTO users (email, name, picture, first_seen_at, last_seen_at, login_count)
+     VALUES (?, ?, ?, ?, ?, 1)
+     ON CONFLICT(email) DO UPDATE SET
+       name = excluded.name,
+       picture = excluded.picture,
+       last_seen_at = excluded.last_seen_at,
+       login_count = users.login_count + 1`
+  )
+    .bind(user.email, user.name, user.picture, now, now)
+    .run();
+
+  await logEvent(env, request, user, "login", "session", user.email, via ? { via } : null);
+}
+
+/**
  * Ownership. Normally an exact email match.
  *
  * The name fallback exists only for posts imported from the pre-auth JSONBin
@@ -594,20 +692,7 @@ async function handleAuthSession(request, env) {
     );
   }
 
-  const now = Date.now();
-  await env.DB.prepare(
-    `INSERT INTO users (email, name, picture, first_seen_at, last_seen_at, login_count)
-     VALUES (?, ?, ?, ?, ?, 1)
-     ON CONFLICT(email) DO UPDATE SET
-       name = excluded.name,
-       picture = excluded.picture,
-       last_seen_at = excluded.last_seen_at,
-       login_count = users.login_count + 1`
-  )
-    .bind(user.email, user.name, user.picture, now, now)
-    .run();
-
-  await logEvent(env, request, user, "login", "session", user.email, null);
+  await recordLogin(env, request, user);
 
   return json(
     { token: await mintSession(user, env), user: { email: user.email, name: user.name, picture: user.picture } },
@@ -974,6 +1059,14 @@ export default {
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders(request, env) });
+    }
+
+    // Redirect-mode sign-in is posted by Google, from accounts.google.com, so
+    // it has to be routed ahead of the allow-list below — which exists to keep
+    // other people's pages off this API and would otherwise turn Google away.
+    // It does its own, stricter Origin check for exactly that reason.
+    if (path === "/api/auth/redirect" && request.method === "POST") {
+      return handleAuthRedirect(request, env);
     }
 
     // Reject cross-origin requests from anywhere we haven't allow-listed,

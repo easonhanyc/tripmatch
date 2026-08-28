@@ -11,6 +11,7 @@ Anyone with a Berkeley account can post a trip — offering seats or looking for
 ## Features
 
 - **Berkeley-only sign-in** — Google Sign-In restricted to the `berkeley.edu` Workspace domain, verified server-side, so everyone on the board is a verified member of the community
+- **Works from the group chat** — a link tapped in WhatsApp opens in that app's built-in browser, where Google's popup sign-in has no window to return a credential to and dies on a blank page. Those browsers are detected and switched to Google's redirect flow, which doesn't need a popup; the gate also carries a way out to Safari or Chrome for the ones Google refuses outright
 - **Post a trip** — role (driving / need a ride), origin and destination city, date, optional time and notes
 - **Grouped, filterable board** — routes grouped by region + date, with one-click filters for role and date
 - **Comments** — ask a question on someone's post without leaving the page
@@ -44,7 +45,7 @@ This replaced a JSONBin setup that shipped an API key in the page source and rew
 | `logs.html` | Admin activity-log viewer |
 | `worker/worker.js` | The API |
 | `worker/schema.sql` | Database schema |
-| `worker/test/api.test.mjs` | 70 checks against the real worker and real SQL |
+| `worker/test/api.test.mjs` | 168 checks against the real worker and real SQL |
 | `scripts/migrate-jsonbin-to-d1.mjs` | One-shot import from the old board |
 | `DEPLOY.md` | Step-by-step deploy runbook |
 | `INFRASTRUCTURE.md` | Architecture, scalability analysis, known limits |

@@ -1,4 +1,4 @@
-import { call, makeIdToken, env, db } from "./harness.mjs";
+import { call, makeIdToken, env, db, worker, ORIGIN } from "./harness.mjs";
 
 let pass = 0, fail = 0;
 const results = [];
@@ -696,6 +696,83 @@ ok("an over-long report is truncated, not rejected", r.status === 201, r.data);
 r = await call("GET", "/api/feedback", { token: admin });
 const longOne = r.data.rows.find(x => x.body.startsWith("xxx"));
 ok("truncated to the cap", longOne && longOne.body.length === 2000, { len: longOne && longOne.body.length });
+
+// ------------------------------------------- REDIRECT-MODE SIGN-IN
+group("Redirect-mode sign-in (embedded browsers)");
+
+// Google posts the credential here as a form, from its own origin, instead of
+// handing it back through a popup window that an app's built-in browser can
+// never open. Drive the worker directly: this leg is a 303 with the session in
+// the fragment, not the JSON every other endpoint speaks.
+async function postRedirect({ credential, origin = "https://accounts.google.com", cookie, csrf } = {}) {
+  const form = new URLSearchParams();
+  if (credential !== undefined) form.set("credential", credential);
+  if (csrf !== undefined) form.set("g_csrf_token", csrf);
+
+  const headers = { "Content-Type": "application/x-www-form-urlencoded" };
+  if (origin) headers.Origin = origin;
+  if (cookie) headers.Cookie = cookie;
+
+  const req = new Request("https://api.test/api/auth/redirect", {
+    method: "POST", headers, body: form.toString(),
+  });
+  req.cf = { country: "US" };
+  const res = await worker.fetch(req, env, {});
+  const loc = res.headers.get("Location") || "";
+  const frag = new URLSearchParams(loc.slice(loc.indexOf("#") + 1));
+  return { status: res.status, location: loc, token: frag.get("tm"), error: frag.get("tmerr") };
+}
+
+let rr = await postRedirect({ credential: await makeIdToken({ email: "webview@berkeley.edu" }) });
+ok("a redirect sign-in answers with a 303 back to the board", rr.status === 303, rr);
+ok("it returns to the board, never to a caller-chosen address", rr.location.startsWith(ORIGIN + "/#"), rr.location);
+ok("the session rides home in the fragment, not the query", !!rr.token && rr.location.indexOf("?") === -1, rr.location);
+
+// The whole point: the token it hands back has to work like any other.
+r = await call("GET", "/api/me", { token: rr.token });
+ok("the fragment token is a working session", r.status === 200 && r.data.user.email === "webview@berkeley.edu", r.data);
+
+r = await call("GET", "/api/logs?action=login", { token: admin });
+ok("a redirect sign-in is logged like any other",
+   r.data.rows.some(x => x.actor_email === "webview@berkeley.edu"), { rows: r.data.rows.length });
+ok("the log says which flow it came in on",
+   r.data.rows.some(x => JSON.parse(x.detail || "{}").via === "redirect"));
+
+rr = await postRedirect({ credential: await makeIdToken({ email: "outsider@gmail.com", hd: undefined }) });
+ok("a non-Berkeley account is turned away with a code, not a blank page",
+   rr.status === 303 && rr.error === "WRONG_DOMAIN" && !rr.token, rr);
+
+rr = await postRedirect({ credential: "not-a-token" });
+ok("a malformed credential is refused", rr.error === "BAD_CREDENTIAL" && !rr.token, rr);
+
+rr = await postRedirect({ credential: undefined });
+ok("a post with no credential at all is refused", !rr.token, rr);
+
+// Login CSRF: someone else's valid credential, posted by a victim's browser,
+// would sign that victim into the attacker's account. A browser always sends
+// Origin on a cross-site form post and can't forge it, so this is the check
+// that holds — the g_csrf_token cookie never reaches a cross-domain endpoint.
+rr = await postRedirect({ credential: await makeIdToken(), origin: "https://evil.example.com" });
+ok("a post from anywhere but Google is refused", rr.error === "BAD_ORIGIN" && !rr.token, rr);
+
+r = await call("GET", "/api/logs?action=login.rejected", { token: admin });
+ok("the refused origin is recorded, so this is visible if it ever happens",
+   r.data.rows.some(x => JSON.parse(x.detail || "{}").reason === "bad_post_origin"));
+
+// And if the cookie ever does arrive, it has to match.
+rr = await postRedirect({ credential: await makeIdToken(), cookie: "g_csrf_token=abc123", csrf: "abc123" });
+ok("a matching csrf cookie and field are accepted", !!rr.token, rr);
+
+rr = await postRedirect({ credential: await makeIdToken(), cookie: "g_csrf_token=abc123", csrf: "different" });
+ok("a mismatched csrf field is refused", rr.error === "BAD_CREDENTIAL" && !rr.token, rr);
+
+rr = await postRedirect({ credential: await makeIdToken(), cookie: "g_csrf_token=abc123" });
+ok("a csrf cookie with no matching field is refused", rr.error === "BAD_CREDENTIAL" && !rr.token, rr);
+
+// The endpoint has to stay reachable from Google specifically, which the
+// allow-list guarding every other route would otherwise prevent.
+r = await call("GET", "/api/board", { origin: "https://accounts.google.com", token: alice });
+ok("Google's origin is still not allowed anywhere else", r.status === 403, r.data);
 
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
