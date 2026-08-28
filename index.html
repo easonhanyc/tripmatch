@@ -659,6 +659,60 @@
     font-size: 12.5px;
     line-height: 1.5;
   }
+  /* A link tapped inside WhatsApp or Instagram opens in that app's embedded
+     browser, not the real one. Google's sign-in then loads as a full page at
+     accounts.google.com that either renders blank or, having no opener window
+     to postMessage a credential back to, can never return here — so the user
+     is stranded on a white screen having never touched our API at all. Say so
+     before they tap, and hand them the URL to paste into a real browser. */
+  .auth-inapp {
+    margin: 0 0 18px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: #fff8e6;
+    border: 1px solid #e8cf8a;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+  .auth-inapp strong { display: block; margin-bottom: 4px; }
+  .auth-inapp ol { margin: 6px 0 0; padding-left: 18px; }
+  .auth-inapp li { margin: 2px 0; }
+  .copy-link {
+    margin-top: 10px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .auth-url {
+    display: block;
+    margin-top: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 12px;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--ink-soft);
+  }
+  .auth-hint { margin-top: 12px; font-size: 12px; line-height: 1.5; text-align: center; color: var(--ink-soft); }
+  .auth-hint button {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 12px;
+    color: var(--founders);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
   .auth-foot {
     border-top: 1px solid var(--line-soft);
     padding: 14px 24px;
@@ -986,8 +1040,23 @@
         is a verified member of the community. Signing in also means your posts stay yours —
         you can edit or delete them from any device, not just the one you posted from.
       </p>
+      <div class="auth-inapp hidden" id="authInApp">
+        <strong>Open this in your browser to sign in</strong>
+        A link tapped in WhatsApp or Instagram opens in that app's own built-in
+        browser, and Google sign-in can't finish there — it stops on a blank page.
+        <ol>
+          <li>Tap the <b>⋯</b> or share button in this bar.</li>
+          <li>Choose <b>Open in Safari</b> or <b>Open in Chrome</b>.</li>
+        </ol>
+        <button type="button" class="copy-link" id="copyLinkBtn">Copy the link instead</button>
+        <input class="auth-url hidden" id="authUrl" readonly>
+      </div>
       <div class="auth-btn-wrap" id="gsiButton"></div>
       <div class="auth-fallback" id="authFallback">Loading Google sign-in…</div>
+      <div class="auth-hint hidden" id="authHint">
+        Stuck on a blank Google page?
+        <button type="button" id="showInAppBtn">Open TripMatch in Safari or Chrome</button>.
+      </div>
       <div class="auth-err hidden" id="authErr"></div>
     </div>
     <div class="auth-foot">
@@ -1433,6 +1502,80 @@
     document.getElementById("whoAmI").textContent = u ? u.name : "";
   }
 
+  // ---- embedded browsers ------------------------------------------------
+  //
+  // Tapping the board's link inside WhatsApp opens it in that app's own
+  // WebView rather than handing it to Safari or Chrome. Google sign-in cannot
+  // complete there: the credential comes back by postMessage to the window
+  // that opened the popup, and a WebView that navigated itself to
+  // accounts.google.com has no such window — so the user lands on a blank
+  // Google page, never returns, and never reaches our API, which is why a
+  // report like this leaves no trace in the activity log at all.
+  //
+  // A user agent is the only signal these WebViews give us, so treat a match
+  // as advice rather than a lockout: the Google button stays on screen either
+  // way, and a false positive costs a paragraph of text, not an account.
+  var INAPP_MARKERS = [
+    /FBAN|FBAV|FB_IAB|FBIOS/i,   // Facebook, Messenger and WhatsApp on Android
+    /Instagram/i,
+    /\bWhatsApp\b/i,
+    /\bLine\//i,
+    /Snapchat/i,
+    /LinkedInApp/i,
+    /MicroMessenger/i,           // WeChat
+    /\bWebView\b/i,
+    /;\s*wv[;)]/i                // Android WebView's own marker
+  ];
+
+  function isInAppBrowser() {
+    var ua = navigator.userAgent || "";
+    for (var i = 0; i < INAPP_MARKERS.length; i++) {
+      if (INAPP_MARKERS[i].test(ua)) return true;
+    }
+    return isIosWebView();
+  }
+
+  // iOS is the harder half: WhatsApp's WebView adds nothing to the user agent
+  // there, so it reads as ordinary Safari. The tell is `navigator.standalone`
+  // — the home-screen-app flag, which real Safari defines (and a home-screen
+  // install sets to true) but a WKWebView leaves undefined. Chrome, Firefox
+  // and friends on iOS are real browsers where sign-in works, so name them
+  // before falling through to the flag.
+  function isIosWebView() {
+    var ua = navigator.userAgent || "";
+    if (!/iPad|iPhone|iPod/.test(ua)) return false;
+    if (/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo/.test(ua)) return false;
+    return typeof navigator.standalone === "undefined";
+  }
+
+  function showInAppHelp() {
+    document.getElementById("authInApp").classList.remove("hidden");
+    document.getElementById("authHint").classList.add("hidden");
+  }
+
+  // Clipboard access is itself often denied inside these WebViews, so fall
+  // back to showing the URL in a field they can select by hand rather than
+  // reporting a copy that never happened.
+  function copyBoardLink() {
+    var btn = document.getElementById("copyLinkBtn");
+    var url = location.origin + location.pathname;
+
+    function reveal() {
+      var field = document.getElementById("authUrl");
+      field.value = url;
+      field.classList.remove("hidden");
+      field.focus();
+      field.setSelectionRange(0, url.length);
+      btn.textContent = "Select and copy the link below";
+    }
+
+    if (!navigator.clipboard || !navigator.clipboard.writeText) return reveal();
+    navigator.clipboard.writeText(url).then(function () {
+      btn.textContent = "Link copied ✓";
+      setTimeout(function () { btn.textContent = "Copy the link instead"; }, 3000);
+    }, reveal);
+  }
+
   // Google Identity Services loads async and may not be ready when we are.
   // Poll briefly rather than racing it, and if it never arrives say so
   // plainly instead of leaving an empty box where a button should be —
@@ -1446,6 +1589,17 @@
     if (!configured()) {
       fallback.textContent = "This deployment isn't configured yet — API_BASE and GOOGLE_CLIENT_ID still need to be filled in near the top of index.html.";
       return;
+    }
+
+    // Warn before they tap, not after — by the time Google's blank page is on
+    // screen there is nothing of ours left to read it from. Undetectable
+    // WebViews exist, so everyone else gets the same way out, quietly. This
+    // runs again on every retry tick and every return to the gate, so the
+    // hint must not reappear underneath a panel the reader already opened.
+    if (isInAppBrowser()) {
+      showInAppHelp();
+    } else if (document.getElementById("authInApp").classList.contains("hidden")) {
+      document.getElementById("authHint").classList.remove("hidden");
     }
 
     if (!window.google || !window.google.accounts || !window.google.accounts.id) {
@@ -1529,6 +1683,9 @@
 
   async function init() {
     document.getElementById("signOutBtn").addEventListener("click", signOut);
+
+    document.getElementById("copyLinkBtn").addEventListener("click", copyBoardLink);
+    document.getElementById("showInAppBtn").addEventListener("click", showInAppHelp);
 
     // Losing and regaining a network are the two most common failure states
     // on a phone walking across campus, and both should resolve themselves
